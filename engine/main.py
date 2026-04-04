@@ -1,17 +1,13 @@
-import subprocess
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-# Clean imports - no extra config classes needed!
-from browser_use import Agent, Browser, ChatOllama
+# Import ChatGoogle directly from browser_use!
+from browser_use import Agent, Browser, ChatGoogle
 
-wsl_host_ip = (
-    subprocess.check_output("ip route list default | awk '{print $3}'", shell=True)
-    .decode("utf-8")
-    .strip()
-)
-windows_ollama_url = f"http://{wsl_host_ip}:11434"
+# Set your API Key here
+os.environ["GOOGLE_API_KEY"] = ""
 
 app = FastAPI(title="Aetura Engine API")
 
@@ -29,24 +25,13 @@ class ExploreRequest(BaseModel):
     intent: str
 
 
-@app.get("/")
-async def root():
-    return {
-        "message": "Welcome to the Aetura Engine API. Use /explore to explore websites."
-    }
-
-
 @app.post("/explore")
 async def explore_website(request: ExploreRequest):
     print(f"Received request to explore: {request.url}")
 
-    llm = ChatOllama(
-        model="llama3.2-vision",
-        host=windows_ollama_url,
-        ollama_options={"num_ctx": 16000},
-    )
+    # Use the built-in browser-use wrapper for Gemini
+    llm = ChatGoogle(model="gemini-2.0-flash")
 
-    # Just passing headless=False directly is all we need!
     browser = Browser(headless=False)
 
     agent = Agent(
