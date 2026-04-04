@@ -3,16 +3,17 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {
-    "dev:ui": "npx tauri dev",
-    "dev:engine": "cd engine && uvicorn main:app --reload",
-    "dev": "npx concurrently \"npm run dev:engine\" \"npm run dev:ui\""
-  },
   "keywords": [],
+  "scripts": {
+    "dev:ui": "pnpm tauri dev",
+    "dev:engine": "cd engine && ./venv/bin/uvicorn main:app --reload",
+    "dev": "concurrently \"pnpm run dev:engine\" \"pnpm run dev:ui\""
+  },
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "@tauri-apps/cli": "^2.10.1"
+    "@tauri-apps/cli": "^2.10.1",
+    "concurrently": "^9.2.1"
   }
 }
