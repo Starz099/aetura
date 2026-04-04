@@ -1,0 +1,70 @@
+# =========================
+# 1. OS & Editor Files
+# =========================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*.swo
+
+# =========================
+# 2. Node.js & React (Frontend & Root)
+# =========================
+node_modules/
+dist/
+dist-ssr/
+*.local
+.npm/
+
+# Environment variables (Never commit these!)
+.env
+.env.*
+!.env.example
+
+# npm/yarn/pnpm diagnostic logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# =========================
+# 3. Rust & Tauri (Backend)
+# =========================
+# Ignore the build artifacts
+/src-tauri/target/
+
+# Ignore generated binaries
+*.rs.bk
+*.pdb
+
+# Note: We DO NOT ignore Cargo.lock for binary applications like Tauri.
+# You want to commit Cargo.lock so your builds are reproducible.
+
+# =========================
+# 4. Python & FastAPI (AI Engine)
+# =========================
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Compiled byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Playwright & AI specific
+/engine/playwright-report/
+/engine/test-results/
+*.log
+
+# Caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
