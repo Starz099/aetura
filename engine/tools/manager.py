@@ -108,6 +108,41 @@ AGENT_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "scroll_page",
+            "description": "Scrolls the webpage. Use 'down' or 'up' for a single screen height. Use 'bottom' or 'top' to jump all the way to the ends of the page.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "direction": {
+                        "type": "string",
+                        "enum": ["down", "up", "bottom", "top"],  # NEW ENUMS
+                        "description": "The direction to scroll.",
+                    }
+                },
+                "required": ["direction"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "hover_element",
+            "description": "Hovers the mouse cursor over an element using its ID. Use this to reveal hidden drop-down menus, tooltips, or expanding UI elements.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "element_id": {
+                        "type": "integer",
+                        "description": "The ID of the element to hover over.",
+                    }
+                },
+                "required": ["element_id"],
+            },
+        },
+    },
 ]
 
 
@@ -176,6 +211,26 @@ async def execute_tool(tool_call, page):
 
             return f"Successfully pressed '{key_name}' on ID {element_id}."
 
+        elif func_name == "hover_element":
+            element_id = args.get("element_id")
+
+            # Defensive check
+            if not element_id:
+                error_msg = f"Failed to hover. No 'element_id' argument was provided."
+                print(f"❌ {error_msg}")
+                return error_msg
+
+            selector = f"[data-aetura-id='{element_id}']"
+            print(f"🖱️ Hovering over ID {element_id}...")
+
+            # Move the virtual mouse to the element
+            await page.hover(selector)
+
+            # Wait a second for CSS transitions/animations to finish opening the menu
+            await asyncio.sleep(1.5)
+
+            return f"Successfully hovered over ID {element_id}."
+
         elif func_name == "extract_text":
             print("📄 Extracting readable text from the page...")
 
@@ -193,6 +248,32 @@ async def execute_tool(tool_call, page):
                 clean_text += "\n...[Text truncated for length]"
 
             return f"Page Text Content:\n\n{clean_text}"
+
+        elif func_name == "scroll_page":
+            direction = args.get("direction", "down").lower()
+            print(f" Scrolling page {direction} smoothly...")
+
+            # We use the native JS object syntax with behavior: 'smooth' for that cinematic effect!
+            if direction == "up":
+                await page.evaluate(
+                    "window.scrollBy({ top: -window.innerHeight, left: 0, behavior: 'smooth' })"
+                )
+            elif direction == "bottom":
+                await page.evaluate(
+                    "window.scrollTo({ top: document.body.scrollHeight, left: 0, behavior: 'smooth' })"
+                )
+            elif direction == "top":
+                await page.evaluate(
+                    "window.scrollTo({ top: 0, left: 0, behavior: 'smooth' })"
+                )
+            else:
+                await page.evaluate(
+                    "window.scrollBy({ top: window.innerHeight, left: 0, behavior: 'smooth' })"
+                )
+
+            # The 1.5 second sleep here gives the cinematic animation time to finish before the agent takes another action
+            await asyncio.sleep(1.5)
+            return f"Successfully scrolled the page {direction}."
 
         elif func_name == "click_element":
             print(f"Clicking ID {element_id}")

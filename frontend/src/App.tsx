@@ -18,8 +18,8 @@ function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          url: 'https:google.com',
-          intent: 'go to https://starzz.dev/ and summarize the content of the page',
+          url: 'https://starzz.dev/',
+          intent: "hover the navbar links one by one and stop",
         })
       })
       const data = await response.json()

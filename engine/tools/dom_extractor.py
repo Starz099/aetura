@@ -13,14 +13,19 @@ DOM_EXTRACTOR_JS = """
             let text = el.innerText || el.value || el.placeholder || el.getAttribute('aria-label') || el.name || el.title || 'Unknown';
             text = text.trim().replace(/\\n/g, ' ').substring(0, 60); 
             
-            // NEW: Differentiate between text inputs and submit/button inputs
             let elementType = el.tagName.toLowerCase();
             if (elementType === 'input') {
                 elementType += `[type="${el.type || 'text'}"]`;
             }
             
+            // 🚨 NEW: Give the AI X-Ray vision into where links go! 🚨
+            let extraInfo = '';
+            if (elementType === 'a' && el.hasAttribute('href')) {
+                extraInfo = ` [href="${el.getAttribute('href')}"]`;
+            }
+            
             if (text !== 'Unknown' && text !== '') {
-                result.push(`[ID: ${idCounter}] ${elementType} - "${text}"`);
+                result.push(`[ID: ${idCounter}] ${elementType}${extraInfo} - "${text}"`);
                 idCounter++;
             }
         }

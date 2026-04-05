@@ -21,7 +21,7 @@ class AIEngine:
     async def get_decision(
         self, system_prompt: str, user_prompt: str, available_tools: list
     ):
-        print("🧠 Asking AI for next steps...")
+        print(" Asking AI for next steps...")
         api_params = {
             "model": self.model,
             "messages": [

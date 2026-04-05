@@ -16,7 +16,7 @@ async def run_exploration(url: str, intent: str):
     await page.wait_for_load_state("networkidle")
     await asyncio.sleep(1)
 
-    max_steps = 5
+    max_steps = 20
     step_count = 0
     final_message = ""
     memory = ""  # NEW: A place to store what the agent learns
@@ -31,24 +31,43 @@ async def run_exploration(url: str, intent: str):
 
         # 2. Build the prompts
         system_prompt = (
-            "You are a web automation agent. "
-            "You MUST use the native JSON tool calling feature to take actions. "
+            "You are an autonomous web automation agent. "
+            "You MUST use the provided JSON tools to take actions. "
             "NEVER output raw text tags like <function=...>. "
-            "Use the provided tools to fulfill the user's intent. "
-            "CRITICAL: If the intent is already fulfilled, you MUST use the 'finish_task' tool to stop."
+            "NEVER write out JSON tool calls in your normal text response. You must trigger the actual tool function. "
+            "If you receive a SYSTEM ERROR regarding invalid JSON, you must carefully re-format your NEXT tool call to strictly match the schema. "
+            "CRITICAL RULES: "
+            "1. NEVER call the exact same tool twice in a row if the state hasn't changed. "
+            "2. If you just called 'extract_text', the content is NOW IN YOUR MEMORY. DO NOT call 'extract_text' again! Read your memory instead. "
+            "3. Once you have read the extracted text in your memory and can fulfill the user's intent, you MUST immediately call 'finish_task'."
         )
 
-        # NEW: We are injecting the 'Memory' into the prompt so it doesn't forget
+        # NEW: Injecting a much clearer memory structure
         user_prompt = (
             f"The user wants to: '{intent}'.\n\n"
-            f"Current URL: {page.url}\n"
-            f"Memory of previous actions:\n{memory}\n\n"
-            f"Here is the current state of the webpage:\n{dom_state}\n\n"
-            "What is your next action?"
+            f"Current URL: {page.url}\n\n"
+            f"--- MEMORY LOG (Read this carefully to avoid repeating actions)---\n"
+            f"{memory if memory else 'No previous actions.'}\n"
+            f"------------------\n\n"
+            f"--- CURRENT WEBPAGE (Clickable Elements Only)---\n"
+            f"{dom_state}\n"
+            f"-----------------------\n\n"
+            "What is your next action? If the information you need is already in your MEMORY LOG, call 'finish_task' immediately!"
         )
+        # 3. Ask the Brain (NOW BULLETPROOFED)
+        try:
+            ai_response = await ai.get_decision(system_prompt, user_prompt, AGENT_TOOLS)
+        except Exception as e:
+            # If Groq throws a 400 error due to hallucinated tags, we catch it!
+            error_msg = str(e)
+            print(f"⚠️ API Error caught: {error_msg}")
 
-        # 3. Ask the Brain
-        ai_response = await ai.get_decision(system_prompt, user_prompt, AGENT_TOOLS)
+            # Save the error to memory so the AI knows it made a formatting mistake
+            memory += f"\n- SYSTEM ERROR: You output invalid JSON or raw tags. You must use the native JSON tool schema. Try again.\n"
+
+            # Wait a second and let the while loop start the next step
+            await asyncio.sleep(1)
+            continue
 
         # 4. Check if the AI used a tool
         if ai_response.tool_calls:
