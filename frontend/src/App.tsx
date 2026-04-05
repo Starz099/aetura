@@ -18,12 +18,12 @@ function App() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          url: 'https://google.com',
-          intent: 'Go to https://starzz.dev'
+          url: 'https:google.com',
+          intent: 'go to https://starzz.dev/ and summarize the content of the page',
         })
-      });
-      const data = await response.json();
-      console.log(data);
+      })
+      const data = await response.json()
+      console.log(data)
     } catch (error) { console.error('Error sending API call:', error) }
   }
 

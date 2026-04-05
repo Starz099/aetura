@@ -19,6 +19,7 @@ async def run_exploration(url: str, intent: str):
     max_steps = 5
     step_count = 0
     final_message = ""
+    memory = ""  # NEW: A place to store what the agent learns
 
     # The Agent Loop
     while step_count < max_steps:
@@ -31,17 +32,22 @@ async def run_exploration(url: str, intent: str):
         # 2. Build the prompts
         system_prompt = (
             "You are a web automation agent. "
+            "You MUST use the native JSON tool calling feature to take actions. "
+            "NEVER output raw text tags like <function=...>. "
             "Use the provided tools to fulfill the user's intent. "
             "CRITICAL: If the intent is already fulfilled, you MUST use the 'finish_task' tool to stop."
         )
+
+        # NEW: We are injecting the 'Memory' into the prompt so it doesn't forget
         user_prompt = (
             f"The user wants to: '{intent}'.\n\n"
             f"Current URL: {page.url}\n"
+            f"Memory of previous actions:\n{memory}\n\n"
             f"Here is the current state of the webpage:\n{dom_state}\n\n"
             "What is your next action?"
         )
 
-        # 3. Ask the Brain (THIS IS THE LINE THAT WAS MISSING!)
+        # 3. Ask the Brain
         ai_response = await ai.get_decision(system_prompt, user_prompt, AGENT_TOOLS)
 
         # 4. Check if the AI used a tool
@@ -51,7 +57,12 @@ async def run_exploration(url: str, intent: str):
                 action_result = await execute_tool(tool_call, page)
                 print(f"Action Result: {action_result}")
 
-                # --- Break the loop if the AI called finish_task ---
+                # NEW: Save the result to memory so the AI can read it on the next step
+                memory += (
+                    f"\n- Tool '{tool_call.function.name}' returned: {action_result}\n"
+                )
+
+                # Break the loop if the AI called finish_task
                 if "FINISHED:" in action_result:
                     final_message = action_result.replace("FINISHED: ", "")
                     print(f"\nAgent finished task: {final_message}")
@@ -65,7 +76,7 @@ async def run_exploration(url: str, intent: str):
                 await page.wait_for_load_state("networkidle")
                 await asyncio.sleep(1)
         else:
-            # If no tools were called, the AI thinks it is done!
+            # If no tools were called, the AI thinks it is done
             print("\nAgent finished task (No tools used):")
             print(ai_response.content)
             final_message = ai_response.content
