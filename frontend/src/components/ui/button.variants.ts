@@ -1,0 +1,45 @@
+import { cva, type VariantProps } from "class-variance-authority";
+
+const buttonVariants = cva(
+  "group/button inline-flex shrink-0 items-center justify-center rounded-md border-2 bg-clip-padding text-xs/relaxed font-semibold whitespace-nowrap transition-all duration-150 outline-none select-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-[2px] active:not-aria-[haspopup]:shadow-[0_1px_0_var(--shadow-strong)] disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-2 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  {
+    variants: {
+      variant: {
+        default:
+          "border-primary/80 bg-primary text-primary-foreground shadow-[0_3px_0_var(--shadow-strong)] hover:-translate-y-[2px] hover:shadow-[0_5px_0_var(--shadow-strong)] hover:brightness-95",
+        pressable:
+          "border-primary/80 bg-primary text-primary-foreground shadow-[0_3px_0_var(--shadow-strong)] hover:-translate-y-[2px] hover:shadow-[0_5px_0_var(--shadow-strong)] hover:brightness-95",
+        "pressable-outline":
+          "border-border bg-card text-foreground shadow-[0_3px_0_var(--shadow-strong)] hover:-translate-y-[2px] hover:shadow-[0_5px_0_var(--shadow-strong)] hover:bg-muted",
+        outline:
+          "border-border bg-card hover:bg-input/50 hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:bg-input/30",
+        secondary:
+          "border-border bg-secondary text-secondary-foreground shadow-[0_2px_0_var(--shadow-soft)] hover:-translate-y-1 hover:shadow-[0_3px_0_var(--shadow-soft)] hover:bg-secondary/90 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+        ghost:
+          "border-transparent hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+        destructive:
+          "border-destructive/40 bg-destructive/10 text-destructive shadow-[0_2px_0_var(--shadow-soft)] hover:-translate-y-1 hover:shadow-[0_3px_0_var(--shadow-soft)] hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+        link: "text-primary underline-offset-4 hover:underline",
+      },
+      size: {
+        default:
+          "h-7 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
+        xs: "h-5 gap-1 rounded-sm px-2 text-[0.625rem] has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-2.5",
+        sm: "h-6 gap-1 px-2 text-xs/relaxed has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
+        lg: "h-8 gap-1 px-2.5 text-xs/relaxed has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-4",
+        icon: "size-7 [&_svg:not([class*='size-'])]:size-3.5",
+        "icon-xs": "size-5 rounded-sm [&_svg:not([class*='size-'])]:size-2.5",
+        "icon-sm": "size-6 [&_svg:not([class*='size-'])]:size-3",
+        "icon-lg": "size-8 [&_svg:not([class*='size-'])]:size-4",
+      },
+    },
+    defaultVariants: {
+      variant: "pressable",
+      size: "default",
+    },
+  },
+);
+
+type ButtonVariants = VariantProps<typeof buttonVariants>;
+
+export { buttonVariants, type ButtonVariants };
