@@ -1,8 +1,8 @@
-# main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from orchestrator import run_exploration
+from orchestrator import draft_demo_script, resume_demo_script
+from typing import List, Any
 
 app = FastAPI(title="Aetura Engine API")
 
@@ -20,6 +20,12 @@ class ExploreRequest(BaseModel):
     intent: str
 
 
+class ResumeRequest(BaseModel):
+    url: str
+    intent: str
+    approved_steps: List[Any]
+
+
 # --- THE NEW ROOT ROUTE ---
 @app.get("/")
 async def root():
@@ -33,9 +39,18 @@ async def root():
 # --- THE AGENT ROUTE ---
 @app.post("/explore")
 async def explore_website(request: ExploreRequest):
-    print(f" Received API request to explore: {request.url}")
+    print(f" Received API request to explore: {request.url, request.intent}")
 
     # Trigger the agent!
-    ai_result = await run_exploration(request.url, request.intent)
+    ai_result = await draft_demo_script(request.url, request.intent)
 
     return {"status": "success", "agent_message": ai_result}
+
+
+@app.post("/explore/resume")
+async def resume_website(request: ResumeRequest):
+    print(f"🚀 Resuming script for: {request.url}")
+    script_data = await resume_demo_script(
+        request.url, request.intent, request.approved_steps
+    )
+    return script_data
