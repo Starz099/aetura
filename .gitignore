@@ -53,6 +53,7 @@ venv/
 env/
 ENV/
 .venv/
+recordings/
 
 # Compiled byte-compiled / optimized / DLL files
 __pycache__/

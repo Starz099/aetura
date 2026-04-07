@@ -6,6 +6,8 @@ from ai_engine import AIEngine
 from tools.manager import AGENT_TOOLS, execute_tool
 from tools.dom_extractor import extract_clean_dom
 from models.script import DOMElement, Action, Step, DemoScript
+import os
+from playwright.async_api import async_playwright
 
 
 class MockFunction:
@@ -165,7 +167,7 @@ async def resume_demo_script(url: str, intent: str, approved_steps: list) -> dic
     ai = AIEngine()
 
     page = await browser.start(headless=False)
-    print(f"⏩ Fast-forwarding to resume point for: {url}")
+    print(f" Fast-forwarding to resume point for: {url}")
     await page.goto(url)
     await page.wait_for_load_state("networkidle")
     await asyncio.sleep(1)
@@ -175,7 +177,6 @@ async def resume_demo_script(url: str, intent: str, approved_steps: list) -> dic
     memory = ""
     script_steps = []
 
-    # --- PHASE 1: DETERMINISTIC FAST-FORWARD ---
     print("\n[PHASE 1: Replaying approved steps...]")
     for step_data in approved_steps:
         step_count += 1
@@ -272,3 +273,53 @@ async def resume_demo_script(url: str, intent: str, approved_steps: list) -> dic
 
     final_script = DemoScript(goal=intent, starting_url=url, steps=script_steps)
     return final_script.model_dump()
+
+
+async def record_demo_video(url: str, approved_steps: list) -> str:
+    """Runs the deterministic loop WITHOUT AI and records a video of the execution."""
+
+    # Ensure the recordings folder exists
+    os.makedirs("recordings", exist_ok=True)
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False)
+        context = await browser.new_context(
+            viewport={"width": 1920, "height": 1080},
+            record_video_dir="recordings/",
+            record_video_size={"width": 1920, "height": 1080},
+            device_scale_factor=2,
+        )
+        page = await context.new_page()
+
+        print(f"\n Starting recording for: {url}")
+        await page.goto(url)
+        await page.wait_for_load_state("networkidle")
+        await asyncio.sleep(1)
+
+        step_count = 0
+        for step_data in approved_steps:
+            step_count += 1
+            print(f" Recording Step {step_count}...")
+
+            # 1. Run the DOM extractor JUST to inject the data-aetura-ids into the page
+            await extract_clean_dom(page)
+
+            # 2. Extract the approved action from the React payload
+            action_name = step_data["action_taken"]["tool_name"]
+            action_args = step_data["action_taken"]["arguments"]
+
+            # 3. Create a fake AI tool call and execute it instantly
+            mock_call = MockToolCall(action_name, action_args)
+            await execute_tool(mock_call, page)
+
+            # Wait for any animations to finish so the video looks smooth
+            await page.wait_for_load_state("networkidle")
+            await asyncio.sleep(1.5)
+
+        # Close the context to finalize and save the .webm video file
+        video_path = await page.video.path()
+        await context.close()
+        await browser.close()
+
+        print(f" Video successfully saved to: {video_path}")
+        return video_path

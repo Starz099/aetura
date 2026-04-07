@@ -37,6 +37,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [isPathBroken, setIsPathBroken] = useState(false);
 
+  // NEW: States for the recording engine
+  const [isRecording, setIsRecording] = useState(false);
+  const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
+
   const handleClick = async () => {
     try {
       const response = await fetch("http://localhost:8000/");
@@ -53,6 +57,7 @@ function App() {
 
       setLoading(true);
       setIsPathBroken(false);
+      setFinalVideoUrl(null); // Clear any previous videos
 
       const response = await fetch("http://localhost:8000/explore", {
         method: "POST",
@@ -102,6 +107,56 @@ function App() {
     }
   };
 
+  // NEW: Function to trigger the Playwright screen recorder
+  const handleRecordScript = async () => {
+    if (!scriptData) return;
+
+    setIsRecording(true);
+    setFinalVideoUrl(null); // Clear previous video if any
+
+    try {
+      const response = await fetch("http://localhost:8000/record", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: scriptData.starting_url,
+          approved_steps: scriptData.steps,
+        }),
+      });
+
+      const data = await response.json();
+
+      // Save the video URL to state!
+      if (data.status === "success") {
+        setFinalVideoUrl(data.video_url);
+      }
+    } catch (error) {
+      console.error("Error recording video:", error);
+    } finally {
+      setIsRecording(false);
+    }
+  };
+
+  const handleLoadMock = async () => {
+    try {
+      const response = await fetch("http://localhost:8000/dev/load-cache");
+      const rawData = await response.json();
+
+      if (rawData.error) {
+        console.error(rawData.error);
+        alert("No cache found. Run a real Start Mapping first.");
+        return;
+      }
+
+      const actualScriptData: DemoScript = rawData.agent_message ? rawData.agent_message : rawData;
+      setScriptData(actualScriptData);
+      setIsPathBroken(false);
+      setFinalVideoUrl(null);
+    } catch (error) {
+      console.error("Error loading mock data:", error);
+    }
+  };
+
   const handleElementChange = (stepIndex: number, newElementId: string) => {
     if (!scriptData) return;
 
@@ -127,11 +182,9 @@ function App() {
     setEditingStepIndex(null);
   };
 
-  // NEW: Helper function to generate beautiful, detailed step descriptions
   const renderStepDescription = (step: Step) => {
     const { tool_name, arguments: args, description } = step.action_taken;
 
-    // If the user manually edited this step, show their custom "Swapped" message
     if (description.startsWith("Swapped")) {
       return (
         <div className="flex items-center gap-2 mt-1">
@@ -141,11 +194,9 @@ function App() {
       );
     }
 
-    // Format the tool name cleanly
     const formattedTool = tool_name.split('_')[0].toUpperCase();
     let targetDetails = "";
 
-    // Cross-reference the ID with the DOM snapshot
     if (tool_name === "click_element" || tool_name === "hover_element") {
       const targetElement = step.available_elements.find((el) => el.element_id === args?.element_id);
       targetDetails = targetElement ? `"${targetElement.text}"` : `Element ID: ${args?.element_id}`;
@@ -167,7 +218,6 @@ function App() {
       );
     }
 
-    // Determine badge color
     let badgeColor = "bg-slate-200 text-slate-800";
     if (formattedTool === "CLICK") badgeColor = "bg-blue-100 text-blue-800";
     if (formattedTool === "HOVER") badgeColor = "bg-purple-100 text-purple-800";
@@ -197,12 +247,15 @@ function App() {
 
         <div className="flex flex-col gap-1">
           <label className="text-sm font-semibold text-slate-600">Enter an intent prompt</label>
-          <Input ref={INTENT} placeholder="Enter intent" defaultValue="go to the latest blog and scroll down the entire page slowly slowly." />
+          <Input ref={INTENT} placeholder="Enter intent" defaultValue="go to the blog section and go the tura blog and then scroll down a little little until we reach the end of the page then click on the like button." />
         </div>
 
         <div className="">
           <Button variant="outline" className="w-full mb-2" onClick={handleClick}>Ping Server</Button>
-          <Button className="w-full" onClick={handleClick2} disabled={loading}>
+          <Button variant="outline" className="w-1/2 " onClick={handleLoadMock}>
+            Load Dev Cache
+          </Button>
+          <Button className="w-full" onClick={handleClick2} disabled={loading || isRecording}>
             {loading && !isPathBroken ? "Auditing Site..." : "Start Mapping"}
           </Button>
         </div>
@@ -219,8 +272,6 @@ function App() {
               <div key={index} className="border p-4 rounded-md shadow-sm bg-white">
 
                 <div className="flex justify-between items-center">
-
-                  {/* BEAUTIFIED COMPONENT USED HERE */}
                   <div className="flex flex-col">
                     <span className="text-xs text-slate-500 font-semibold uppercase tracking-wider">
                       Step {step.step_number}
@@ -232,12 +283,12 @@ function App() {
                     variant={editingStepIndex === index ? "destructive" : "secondary"}
                     size="sm"
                     onClick={() => setEditingStepIndex(editingStepIndex === index ? null : index)}
+                    disabled={isRecording}
                   >
                     {editingStepIndex === index ? "Cancel" : "Edit"}
                   </Button>
                 </div>
 
-                {/* The Edit Dropdown */}
                 {editingStepIndex === index && (
                   <div className="mt-4 p-4 bg-slate-100 rounded-md border border-slate-200">
                     <p className="text-xs font-semibold text-red-500 uppercase tracking-wider mb-2">
@@ -262,7 +313,6 @@ function App() {
             ))}
           </div>
 
-          {/* Path Broken Warning & Resume Button */}
           {isPathBroken && (
             <div className="mt-6 p-4 bg-orange-50 border border-orange-200 rounded-md">
               <p className="text-orange-800 text-sm font-semibold mb-3">
@@ -271,16 +321,44 @@ function App() {
               <Button
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                 onClick={handleResumeScript}
-                disabled={loading}
+                disabled={loading || isRecording}
               >
                 {loading ? "Re-calculating..." : "Generate Remaining Steps"}
               </Button>
             </div>
           )}
 
-          <Button className="w-full mt-8" size="lg" disabled={isPathBroken || loading}>
-            Confirm & Record Demo
-          </Button>
+          {/* THE NEW RECORDING BUTTON & VIDEO PLAYER */}
+          {!finalVideoUrl && (
+            <Button
+              className="w-full mt-8"
+              size="lg"
+              onClick={handleRecordScript}
+              disabled={isPathBroken || loading || isRecording}
+            >
+              {isRecording ? "🎥 Filming Demo..." : "Confirm & Record Demo"}
+            </Button>
+          )}
+
+          {finalVideoUrl && (
+            <div className="mt-8 p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+              <h3 className="text-green-800 font-bold mb-4 text-xl">🎉 Your AI Demo is Ready!</h3>
+              <video
+                src={finalVideoUrl}
+                controls
+                autoPlay
+                className="w-full rounded-md shadow-lg border border-slate-300"
+              />
+              <Button
+                variant="outline"
+                className="mt-4 w-full"
+                onClick={() => setFinalVideoUrl(null)}
+              >
+                Clear Video & Edit Script
+              </Button>
+            </div>
+          )}
+
         </Card>
       )}
 
