@@ -27,7 +27,6 @@ class Step(BaseModel):
     step_number: int
     current_url: str
     action_taken: Action
-    # This is the crucial DOM snapshot for the frontend dropdowns
     available_elements: List[DOMElement]
 
 

@@ -1,16 +1,15 @@
 import os
 from openai import AsyncOpenAI
-from dotenv import load_dotenv  # Add this import
+from dotenv import load_dotenv
 
 load_dotenv()
 
 
 class AIEngine:
     def __init__(self):
-        # Using Groq for the lightning-fast free tier
         api_key = os.environ.get("GROQ_API_KEY")
         if not api_key:
-            raise ValueError("⚠️ GROQ_API_KEY environment variable is missing!")
+            raise ValueError("GROQ_API_KEY environment variable is missing.")
 
         self.client = AsyncOpenAI(
             api_key=api_key,
@@ -21,7 +20,6 @@ class AIEngine:
     async def get_decision(
         self, system_prompt: str, user_prompt: str, available_tools: list
     ):
-        print(" Asking AI for next steps...")
         api_params = {
             "model": self.model,
             "messages": [

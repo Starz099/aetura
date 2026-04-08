@@ -8,8 +8,6 @@ client = OpenAI(
     api_key=os.getenv("GROK_API_KEY"), base_url="https://api.groq.com/openai/v1"
 )
 
-# 2. Define the Playwright Tools for the AI
-# This tells the AI exactly what physical actions it is allowed to take.
 tools = [
     {
         "type": "function",
@@ -53,7 +51,6 @@ tools = [
 
 
 def test_agent_logic():
-    # 3. We simulate what the DOM Extractor (The "Eyes") would see on a page
     simulated_dom = """
     Currently visible elements:
     [ID: 1, Type: Input, Placeholder: "Search for anything..."]
@@ -65,9 +62,8 @@ def test_agent_logic():
 
     print("Sending DOM and Intent to Groq...")
 
-    # 4. Ask the LLM what to do
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",  # Using the massive 70B model for free!
+        model="llama-3.3-70b-versatile",
         messages=[
             {
                 "role": "system",
@@ -82,20 +78,17 @@ def test_agent_logic():
         tool_choice="auto",
     )
 
-    # 5. Extract the AI's decision
     response_message = response.choices[0].message
     tool_calls = response_message.tool_calls
 
     if tool_calls:
-        print("\n✅ AI Decided to use tools!")
+        print("AI Decided to use tools!")
         for tool_call in tool_calls:
             function_name = tool_call.function.name
             function_args = json.loads(tool_call.function.arguments)
-
-            # Here is where we would actually trigger Playwright!
             print(f"-> Playwright Action Triggered: {function_name}({function_args})")
     else:
-        print("\n❌ AI didn't use a tool. It just said:")
+        print("AI didn't use a tool. It just said:")
         print(response_message.content)
 
 

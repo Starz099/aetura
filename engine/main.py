@@ -12,7 +12,7 @@ app = FastAPI(title="Aetura Engine API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, restrict this to your React app's URL
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,7 +37,6 @@ class RecordRequest(BaseModel):
     approved_steps: List[Any]
 
 
-# --- THE NEW ROOT ROUTE ---
 @app.get("/")
 async def root():
     return {
@@ -47,12 +46,9 @@ async def root():
     }
 
 
-# --- THE AGENT ROUTE ---
 @app.post("/explore")
 async def explore_website(request: ExploreRequest):
-    print(f" Received API request to explore: {request.url, request.intent}")
-
-    # Trigger the agent!
+    print(f"Received API request to explore: {request.url, request.intent}")
     ai_result = await draft_demo_script(request.url, request.intent)
     with open("dev_cache.json", "w") as f:
         json.dump(ai_result, f)
@@ -62,7 +58,7 @@ async def explore_website(request: ExploreRequest):
 
 @app.post("/explore/resume")
 async def resume_website(request: ResumeRequest):
-    print(f"🚀 Resuming script for: {request.url}")
+    print(f"Resuming script for: {request.url}")
     script_data = await resume_demo_script(
         request.url, request.intent, request.approved_steps
     )
@@ -71,15 +67,9 @@ async def resume_website(request: ResumeRequest):
 
 @app.post("/record")
 async def record_website(request: RecordRequest):
-    print(f"🎬 Received API request to record: {request.url}")
-
-    # 1. Run the recording
+    print(f"Received API request to record: {request.url}")
     full_video_path = await record_demo_video(request.url, request.approved_steps)
-
-    # 2. Extract just the filename (e.g., '1234abc.webm')
     filename = os.path.basename(full_video_path)
-
-    # 3. Return the full URL so React can put it directly into a <video> tag
     return {
         "status": "success",
         "video_url": f"http://localhost:8000/recordings/{filename}",
@@ -88,7 +78,6 @@ async def record_website(request: RecordRequest):
 
 @app.get("/dev/load-cache")
 async def load_dev_cache():
-    print("Loading script from local cache...")
     try:
         with open("dev_cache.json", "r") as f:
             cached_data = json.load(f)

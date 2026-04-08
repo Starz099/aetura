@@ -33,8 +33,6 @@ def parse_dom_state(dom_string: str) -> list[DOMElement]:
         return elements
 
     for line in dom_string.strip().split("\n"):
-        # Regex to extract ID, type, optional href, and text
-        # Handles formats like: [ID: 8] a [href="/blog"] - "Read more"
         match = re.match(
             r'\[ID:\s*(\d+)\]\s*([a-zA-Z0-9_\[\]="]+)(?:\s+\[href="([^"]+)"\])?\s*-\s*"(.*)"',
             line,
@@ -62,19 +60,15 @@ async def draft_demo_script(url: str, intent: str) -> dict:
 
     max_steps = 20
     step_count = 0
-    memory = ""  # NEW: A place to store what the agent learns
+    memory = ""
 
     script_steps = []
-    # The Agent Loop
     while step_count < max_steps:
         step_count += 1
         print(f"\n--- Step {step_count} ---")
 
-        # 1. Look at the page
         dom_state = await extract_clean_dom(page)
         parsed_dom_elements = parse_dom_state(dom_state)
-
-        # 2. Build the prompts
         system_prompt = (
             "You are an autonomous web automation agent. "
             "You MUST use the provided JSON tools to take actions. "
@@ -87,42 +81,29 @@ async def draft_demo_script(url: str, intent: str) -> dict:
             "3. Once you have read the extracted text in your memory and can fulfill the user's intent, you MUST immediately call 'finish_task'."
         )
 
-        # NEW: Injecting a much clearer memory structure
         user_prompt = (
-            f"The user wants to: '{intent}'.\n\n"
-            f"Current URL: {page.url}\n\n"
-            f"--- MEMORY LOG (Read this carefully to avoid repeating actions)---\n"
-            f"{memory if memory else 'No previous actions.'}\n"
-            f"------------------\n\n"
-            f"--- CURRENT WEBPAGE (Clickable Elements Only)---\n"
+            f"The user wants to: '{intent}'. Current URL: {page.url}\n\n"
+            f"--- MEMORY LOG (Read this carefully to avoid repeating actions) ---\n"
+            f"{memory if memory else 'No previous actions.'}"
+            f"\n--- CURRENT WEBPAGE (Clickable Elements Only) ---\n"
             f"{dom_state}\n"
-            f"-----------------------\n\n"
             "What is your next action? If the information you need is already in your MEMORY LOG, call 'finish_task' immediately!"
         )
-        # 3. Ask the Brain (NOW BULLETPROOFED)
         try:
             ai_response = await ai.get_decision(system_prompt, user_prompt, AGENT_TOOLS)
         except Exception as e:
-            # If Groq throws a 400 error due to hallucinated tags, we catch it!
             error_msg = str(e)
             print(f"API Error caught: {error_msg}")
-
-            # Save the error to memory so the AI knows it made a formatting mistake
             memory += f"\n- SYSTEM ERROR: You output invalid JSON or raw tags. You must use the native JSON tool schema. Try again.\n"
-
-            # Wait a second and let the while loop start the next step
             await asyncio.sleep(1)
             continue
 
-        # 4. Check if the AI used a tool
         if ai_response.tool_calls:
-            # We'll assume the AI takes one action per step for clean mapping
             tool_call = ai_response.tool_calls[0]
 
             action_result = await execute_tool(tool_call, page)
             print(f"Action Result: {action_result}")
 
-            # NEW: Record the action for the frontend UI
             try:
                 args = json.loads(tool_call.function.arguments)
             except:
@@ -159,10 +140,7 @@ async def draft_demo_script(url: str, intent: str) -> dict:
     await asyncio.sleep(2)
     await browser.stop()
 
-    # NEW: Package everything into the final Pydantic model
     final_script = DemoScript(goal=intent, starting_url=url, steps=script_steps)
-
-    # Return as a standard Python dict so FastAPI can easily convert it to JSON
     return final_script.model_dump()
 
 
@@ -172,7 +150,7 @@ async def resume_demo_script(url: str, intent: str, approved_steps: list) -> dic
     ai = AIEngine()
 
     page = await browser.start(headless=False)
-    print(f" Fast-forwarding to resume point for: {url}")
+    print(f"Fast-forwarding to resume point for: {url}")
     await page.goto(url)
     await page.wait_for_load_state("networkidle")
     await asyncio.sleep(1)
@@ -187,26 +165,20 @@ async def resume_demo_script(url: str, intent: str, approved_steps: list) -> dic
         step_count += 1
         print(f"Replaying Step {step_count}...")
 
-        # 1. We MUST run the extractor to inject the data-aetura-ids into the page!
         dom_state = await extract_clean_dom(page)
         parsed_dom = parse_dom_state(dom_state)
 
-        # 2. Extract the approved action from the frontend's payload
         action_name = step_data["action_taken"]["tool_name"]
         action_args = step_data["action_taken"]["arguments"]
 
-        # 3. Create a fake AI tool call and execute it
         mock_call = MockToolCall(action_name, action_args)
         action_result = await execute_tool(mock_call, page)
-
-        # 4. Rebuild the Pydantic Step and save to memory
         script_steps.append(Step(**step_data))
         memory += f"\n- Tool '{action_name}' returned: {action_result}\n"
 
         await page.wait_for_load_state("networkidle")
         await asyncio.sleep(1)
 
-    # --- PHASE 2: AI TAKEOVER ---
     print("\n[PHASE 2: AI taking over for remaining steps...]")
     while step_count < max_steps:
         step_count += 1
@@ -215,7 +187,6 @@ async def resume_demo_script(url: str, intent: str, approved_steps: list) -> dic
         dom_state = await extract_clean_dom(page)
         parsed_dom_elements = parse_dom_state(dom_state)
 
-        # Build prompts exactly like draft_demo_script
         system_prompt = (
             "You are an autonomous web automation agent. You MUST use the provided JSON tools. "
             "NEVER output raw text tags. "
@@ -235,7 +206,7 @@ async def resume_demo_script(url: str, intent: str, approved_steps: list) -> dic
         try:
             ai_response = await ai.get_decision(system_prompt, user_prompt, AGENT_TOOLS)
         except Exception as e:
-            print(f"⚠️ API Error caught: {str(e)}")
+            print(f"API Error caught: {str(e)}")
             memory += f"\n- SYSTEM ERROR: Invalid JSON. Try again.\n"
             await asyncio.sleep(1)
             continue
@@ -295,7 +266,6 @@ async def record_demo_video(url: str, approved_steps: list) -> str:
     )
 
     async with async_playwright() as p:
-        # VISIBLE FOR DEBUGGING!
         browser = await p.chromium.launch(headless=False)
 
         context = await browser.new_context(
@@ -343,7 +313,6 @@ async def record_demo_video(url: str, approved_steps: list) -> str:
             action_name = step_data["action_taken"]["tool_name"]
             action_args = step_data["action_taken"]["arguments"]
 
-            # Resilient Cursor Logic: Survives page reloads!
             if (
                 action_name in ["click_element", "hover_element"]
                 and "element_id" in action_args
@@ -360,7 +329,6 @@ async def record_demo_video(url: str, approved_steps: list) -> str:
                 ''')
 
                 if box:
-                    # Inject & Move in one shot. If it was wiped out, it builds a new one.
                     await page.evaluate(f"""
                         () => {{
                             let cursor = document.getElementById('aetura-cursor');
@@ -424,7 +392,7 @@ async def record_demo_video(url: str, approved_steps: list) -> str:
         "-profile:v",
         "main",
         "-movflags",
-        "+faststart",  # 🚨 THIS FIXES THE REACT BLACK SCREEN
+        "+faststart",
         "-crf",
         "12",
         video_path,

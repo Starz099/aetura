@@ -18,7 +18,6 @@ DOM_EXTRACTOR_JS = """
                 elementType += `[type="${el.type || 'text'}"]`;
             }
             
-            // 🚨 NEW: Give the AI X-Ray vision into where links go! 🚨
             let extraInfo = '';
             if (elementType === 'a' && el.hasAttribute('href')) {
                 extraInfo = ` [href="${el.getAttribute('href')}"]`;
@@ -37,5 +36,5 @@ DOM_EXTRACTOR_JS = """
 
 async def extract_clean_dom(page):
     """Executes the JS in Playwright and returns the clean text string."""
-    print("👁️ Extracting interactive elements from the page...")
+    print("Extracting interactive elements from the page...")
     return await page.evaluate(DOM_EXTRACTOR_JS)

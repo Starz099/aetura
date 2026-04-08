@@ -1,7 +1,6 @@
 import asyncio
 import json
 
-# Define the tools exactly how OpenAI/Groq expects them
 AGENT_TOOLS = [
     {
         "type": "function",
@@ -118,7 +117,7 @@ AGENT_TOOLS = [
                 "properties": {
                     "direction": {
                         "type": "string",
-                        "enum": ["down", "up", "bottom", "top"],  # NEW ENUMS
+                        "enum": ["down", "up", "bottom", "top"],
                         "description": "The direction to scroll.",
                     }
                 },
@@ -155,7 +154,6 @@ async def execute_tool(tool_call, page):
     try:
         args_string = tool_call.function.arguments
         args = json.loads(args_string) if args_string else {}
-        # If it parsed "null", it becomes None. Force it to be a dict.
         if not isinstance(args, dict):
             args = {}
     except Exception:
@@ -164,22 +162,20 @@ async def execute_tool(tool_call, page):
     element_id = args.get("element_id")
     selector = f"[data-aetura-id='{element_id}']" if element_id else None
 
-    print(f"⚡ Executing Action: {func_name} with args: {args}")
+    print(f"Executing Action: {func_name} with args: {args}")
 
     try:
         if func_name == "finish_task":
             msg = args.get("final_message")
-            print(f" Agent declared victory: {msg}")
+            print(f"Agent declared victory: {msg}")
             return f"FINISHED: {msg}"
 
         if func_name == "goto_url":
             target_url = args.get("url")
-            print(f"🔗 Navigating to: {target_url}")
+            print(f"Navigating to: {target_url}")
             await page.goto(target_url)
             await page.wait_for_load_state("networkidle")
             return f"Successfully navigated to {target_url}."
-
-        # ... keep existing type_text and click_element logic ...
 
         element_id = args.get("element_id")
         selector = f"[data-aetura-id='{element_id}']"
@@ -193,19 +189,13 @@ async def execute_tool(tool_call, page):
 
         elif func_name == "press_key":
             key_name = args.get("key")
-
-            # Defensive check: Did the AI actually give us a key to press?
             if not key_name:
                 error_msg = f"Failed to press key on ID {element_id}. No 'key' argument was provided."
-                print(f"❌ {error_msg}")
+                print(f"{error_msg}")
                 return error_msg
 
-            print(f"⌨️ Pressing '{key_name}' on ID {element_id}")
-
-            # Playwright's .press() focuses the element and hits the key
+            print(f"Pressing '{key_name}' on ID {element_id}")
             await page.press(selector, key_name)
-
-            # Now this is completely safe because we know key_name is a string!
             if key_name.lower() == "enter":
                 await page.wait_for_timeout(2000)
 
@@ -213,36 +203,25 @@ async def execute_tool(tool_call, page):
 
         elif func_name == "hover_element":
             element_id = args.get("element_id")
-
-            # Defensive check
             if not element_id:
                 error_msg = f"Failed to hover. No 'element_id' argument was provided."
-                print(f"❌ {error_msg}")
+                print(f"{error_msg}")
                 return error_msg
 
             selector = f"[data-aetura-id='{element_id}']"
-            print(f"🖱️ Hovering over ID {element_id}...")
-
-            # Move the virtual mouse to the element
+            print(f"Hovering over ID {element_id}...")
             await page.hover(selector)
-
-            # Wait a second for CSS transitions/animations to finish opening the menu
             await asyncio.sleep(1.5)
 
             return f"Successfully hovered over ID {element_id}."
 
         elif func_name == "extract_text":
-            print("📄 Extracting readable text from the page...")
-
-            # Grab all visible text from the body of the page
+            print("Extracting readable text from the page...")
             page_text = await page.locator("body").inner_text()
-
-            # Clean it up: remove excessive empty lines
             import re
 
             page_text = re.sub(r"\n+", "\n", page_text).strip()
 
-            # Truncate to save tokens (approx 1000 words)
             clean_text = page_text[:4000]
             if len(page_text) > 4000:
                 clean_text += "\n...[Text truncated for length]"
@@ -251,9 +230,7 @@ async def execute_tool(tool_call, page):
 
         elif func_name == "scroll_page":
             direction = args.get("direction", "down").lower()
-            print(f" Scrolling page {direction} smoothly...")
-
-            # We use the native JS object syntax with behavior: 'smooth' for that cinematic effect!
+            print(f"Scrolling page {direction} smoothly...")
             if direction == "up":
                 await page.evaluate(
                     "window.scrollBy({ top: -window.innerHeight, left: 0, behavior: 'smooth' })"
@@ -271,14 +248,12 @@ async def execute_tool(tool_call, page):
                     "window.scrollBy({ top: window.innerHeight, left: 0, behavior: 'smooth' })"
                 )
 
-            # The 1.5 second sleep here gives the cinematic animation time to finish before the agent takes another action
             await asyncio.sleep(1.5)
             return f"Successfully scrolled the page {direction}."
 
         elif func_name == "click_element":
             print(f"Clicking ID {element_id}")
             await page.click(selector)
-            # Wait for any potential navigation or animations after a click
             await page.wait_for_timeout(2000)
             return f"Successfully clicked ID {element_id}."
 
