@@ -130,6 +130,7 @@ function App() {
       if (data.status === "success") {
         setFinalVideoUrl(data.video_url);
       }
+      console.log("Recording response:", data);
     } catch (error) {
       console.error("Error recording video:", error);
     } finally {
@@ -347,6 +348,8 @@ function App() {
                 src={finalVideoUrl}
                 controls
                 autoPlay
+                muted
+                playsInline
                 className="w-full rounded-md shadow-lg border border-slate-300"
               />
               <Button

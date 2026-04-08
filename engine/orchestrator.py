@@ -1,4 +1,8 @@
+import signal
 import asyncio
+import subprocess
+import shutil
+import base64
 import json
 import re
 from browser_engine import BrowserEngine
@@ -8,6 +12,7 @@ from tools.dom_extractor import extract_clean_dom
 from models.script import DOMElement, Action, Step, DemoScript
 import os
 from playwright.async_api import async_playwright
+from pyvirtualdisplay import Display  # type: ignore
 
 
 class MockFunction:
@@ -276,50 +281,156 @@ async def resume_demo_script(url: str, intent: str, approved_steps: list) -> dic
 
 
 async def record_demo_video(url: str, approved_steps: list) -> str:
-    """Runs the deterministic loop WITHOUT AI and records a video of the execution."""
+    """Records a high-fidelity video directly from Chrome's internal rendering engine."""
 
-    # Ensure the recordings folder exists
     os.makedirs("recordings", exist_ok=True)
+    frames_dir = os.path.abspath("temp_frames")
+
+    if os.path.exists(frames_dir):
+        shutil.rmtree(frames_dir)
+    os.makedirs(frames_dir)
+
+    video_path = os.path.abspath(
+        f"recordings/demo_{int(asyncio.get_event_loop().time())}.mp4"
+    )
 
     async with async_playwright() as p:
+        # VISIBLE FOR DEBUGGING!
         browser = await p.chromium.launch(headless=False)
+
         context = await browser.new_context(
-            viewport={"width": 1920, "height": 1080},
-            record_video_dir="recordings/",
-            record_video_size={"width": 1920, "height": 1080},
-            device_scale_factor=2,
+            viewport={"width": 1920, "height": 1080}, device_scale_factor=3
         )
         page = await context.new_page()
 
-        print(f"\n Starting recording for: {url}")
+        client = await context.new_cdp_session(page)
+        frame_counter = {"count": 0}
+
+        async def handle_frame(event):
+            frame_counter["count"] += 1
+            data = event.get("data")
+            session_id = event.get("sessionId")
+
+            with open(
+                os.path.join(frames_dir, f"frame_{frame_counter['count']:05d}.jpg"),
+                "wb",
+            ) as f:
+                f.write(base64.b64decode(data))
+
+            await client.send("Page.screencastFrameAck", {"sessionId": session_id})
+
+        client.on("Page.screencastFrame", handle_frame)
+
+        print(f"Navigating to: {url}")
         await page.goto(url)
         await page.wait_for_load_state("networkidle")
-        await asyncio.sleep(1)
+
+        print("Starting lossless frame capture...")
+        await client.send(
+            "Page.startScreencast",
+            {"format": "jpeg", "quality": 100, "everyNthFrame": 1},
+        )
 
         step_count = 0
         for step_data in approved_steps:
             step_count += 1
-            print(f" Recording Step {step_count}...")
+            print(f"Executing Step {step_count}...")
 
-            # 1. Run the DOM extractor JUST to inject the data-aetura-ids into the page
+            from tools.dom_extractor import extract_clean_dom
+
             await extract_clean_dom(page)
 
-            # 2. Extract the approved action from the React payload
             action_name = step_data["action_taken"]["tool_name"]
             action_args = step_data["action_taken"]["arguments"]
 
-            # 3. Create a fake AI tool call and execute it instantly
+            # Resilient Cursor Logic: Survives page reloads!
+            if (
+                action_name in ["click_element", "hover_element"]
+                and "element_id" in action_args
+            ):
+                el_id = action_args["element_id"]
+
+                box = await page.evaluate(f'''
+                    () => {{
+                        const el = document.querySelector('[data-aetura-id="{el_id}"]');
+                        if (!el) return null;
+                        const rect = el.getBoundingClientRect();
+                        return {{ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }};
+                    }}
+                ''')
+
+                if box:
+                    # Inject & Move in one shot. If it was wiped out, it builds a new one.
+                    await page.evaluate(f"""
+                        () => {{
+                            let cursor = document.getElementById('aetura-cursor');
+                            if (!cursor) {{
+                                cursor = document.createElement('div');
+                                cursor.id = 'aetura-cursor';
+                                cursor.style.width = '24px';
+                                cursor.style.height = '24px';
+                                cursor.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                                cursor.style.border = '2px solid white';
+                                cursor.style.borderRadius = '50%';
+                                cursor.style.position = 'fixed';
+                                cursor.style.top = '50%';
+                                cursor.style.left = '50%';
+                                cursor.style.pointerEvents = 'none';
+                                cursor.style.zIndex = '999999';
+                                cursor.style.transition = 'top 0.5s ease-out, left 0.5s ease-out';
+                                cursor.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+                                document.body.appendChild(cursor);
+                            }}
+                            cursor.style.left = '{box["x"]}px';
+                            cursor.style.top = '{box["y"]}px';
+                        }}
+                    """)
+                    await asyncio.sleep(0.6)
+
+            from tools.manager import execute_tool
+
+            class MockFunction:
+                def __init__(self, name, arguments):
+                    self.name = name
+                    self.arguments = json.dumps(arguments)
+
+            class MockToolCall:
+                def __init__(self, name, arguments):
+                    self.function = MockFunction(name, arguments)
+
             mock_call = MockToolCall(action_name, action_args)
             await execute_tool(mock_call, page)
 
-            # Wait for any animations to finish so the video looks smooth
-            await page.wait_for_load_state("networkidle")
-            await asyncio.sleep(1.5)
+            await page.wait_for_load_state("load")
+            await asyncio.sleep(1)
 
-        # Close the context to finalize and save the .webm video file
-        video_path = await page.video.path()
+        print("Stopping capture...")
+        await client.send("Page.stopScreencast")
         await context.close()
         await browser.close()
 
-        print(f" Video successfully saved to: {video_path}")
-        return video_path
+    print("Stitching frames into high quality MP4...")
+    ffmpeg_cmd = [
+        "ffmpeg",
+        "-y",
+        "-framerate",
+        "30",
+        "-i",
+        os.path.join(frames_dir, "frame_%05d.jpg"),
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        "main",
+        "-movflags",
+        "+faststart",  # 🚨 THIS FIXES THE REACT BLACK SCREEN
+        "-crf",
+        "12",
+        video_path,
+    ]
+    subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    shutil.rmtree(frames_dir)
+    print(f"Video saved to: {video_path}")
+    return video_path
