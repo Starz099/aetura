@@ -43,7 +43,7 @@ interface DemoScript {
   steps: Step[];
 }
 
-function App() {
+function Home() {
   const urlRef = useRef<HTMLInputElement>(null);
   const intentRef = useRef<HTMLInputElement>(null);
 
@@ -423,4 +423,5 @@ function App() {
   );
 }
 
-export default App;
+export default Home;
+

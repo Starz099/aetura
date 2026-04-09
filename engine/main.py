@@ -1,4 +1,5 @@
 import os
+import glob
 import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -84,3 +85,29 @@ async def load_dev_cache():
             return cached_data
     except FileNotFoundError:
         return {"error": "No cache found. Run a real mapping first."}
+
+
+@app.get("/library")
+async def get_library_videos():
+    """Returns absolute paths of all recorded videos."""
+    # Ensure the folder exists
+    os.makedirs("recordings", exist_ok=True)
+
+    # Get all mp4 files in the folder
+    search_path = os.path.abspath(os.path.join("recordings", "*.mp4"))
+    video_files = glob.glob(search_path)
+
+    # Sort by newest first
+    video_files.sort(key=os.path.getmtime, reverse=True)
+
+    videos = []
+    for file_path in video_files:
+        videos.append(
+            {
+                "filename": os.path.basename(file_path),
+                "absolute_path": file_path,
+                "created_at": os.path.getmtime(file_path),
+            }
+        )
+
+    return {"videos": videos}
