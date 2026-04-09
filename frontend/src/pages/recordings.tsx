@@ -41,7 +41,7 @@ export default function Recordings() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
+    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 overflow-auto px-4 py-8 sm:px-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Your Demos</h1>
@@ -49,9 +49,18 @@ export default function Recordings() {
             Locally stored recordings ready for editing.
           </p>
         </div>
-        <Button onClick={fetchLibrary} variant="outline" className="sm:w-auto">
-          Refresh Library
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button asChild variant="outline" className="sm:w-auto">
+            <Link to="/">Home</Link>
+          </Button>
+          <Button
+            onClick={fetchLibrary}
+            variant="outline"
+            className="sm:w-auto"
+          >
+            Refresh Library
+          </Button>
+        </div>
       </div>
 
       {loading ? (

@@ -10,6 +10,7 @@ import {
   Separator,
 } from "@/components/ui";
 import { Input } from "@/components/ui/input";
+import { Link } from "react-router-dom";
 import { useRef, useState } from "react";
 
 interface DOMElement {
@@ -261,12 +262,24 @@ function Home() {
   };
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col items-center px-4 py-8">
+    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5 overflow-auto px-4 py-8">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Home</h1>
+          <p className="mt-1 text-muted-foreground">
+            Map a navigation path from a URL and goal.
+          </p>
+        </div>
+        <Button asChild variant="outline" className="shrink-0">
+          <Link to="/recordings">Go to Recordings</Link>
+        </Button>
+      </div>
+
       <Card className="w-full">
         <CardHeader>
           <CardTitle className="text-base">Welcome to AETURA</CardTitle>
           <CardDescription>
-            Map a navigation path from a URL and goal.
+            Use this workspace to generate, edit, and record a demo flow.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -424,4 +437,3 @@ function Home() {
 }
 
 export default Home;
-

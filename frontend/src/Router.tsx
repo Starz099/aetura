@@ -1,22 +1,22 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/home";
-import Navbar from "./components/navbar/index";
 import Recordings from "./pages/recordings";
 import Editor from "./pages/editor";
 
 const App = () => {
   return (
-    <div>
-      <BrowserRouter>
-        <Navbar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/recordings" element={<Recordings />} />
-          <Route path="/editor" element={<Editor />} />
-          <Route path="/editor/:address" element={<Editor />} />
-        </Routes>
-      </BrowserRouter>
-    </div>
+    <BrowserRouter>
+      <div className="flex h-dvh min-h-screen flex-col bg-background text-foreground">
+        <main className="flex min-h-0 flex-1">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/recordings" element={<Recordings />} />
+            <Route path="/editor" element={<Editor />} />
+            <Route path="/editor/:address" element={<Editor />} />
+          </Routes>
+        </main>
+      </div>
+    </BrowserRouter>
   );
 };
 
