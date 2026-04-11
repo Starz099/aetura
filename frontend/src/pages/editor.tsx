@@ -10,7 +10,7 @@ import {
 import { Button } from "@/components/ui";
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useEditorStore } from "@/assets/store/useEditorStore";
+import { useEditorStore } from "@/store/useEditorStore";
 import { EditorPreview } from "@/components/editor/preview";
 import { EditorTimeline } from "@/components/editor/timeline";
 
@@ -20,6 +20,7 @@ const EditorPage = () => {
   const { address } = useParams();
   const recordingUrl = address ? decodeURIComponent(address) : null;
   const resetTimeline = useEditorStore((state) => state.resetTimeline);
+  const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
 
   const previewUrl = recordingUrl
     ? recordingUrl.startsWith("http://") || recordingUrl.startsWith("https://")
@@ -127,6 +128,12 @@ const EditorPage = () => {
                   variant="outline"
                   className="h-10 w-12 px-0 text-[10px]"
                   title={tool}
+                  onClick={() => {
+                    if (tool === "Zoom") {
+                      addZoomEffect();
+                    }
+                  }}
+                  disabled={tool !== "Zoom"}
                 >
                   {tool.slice(0, 3)}
                 </Button>
