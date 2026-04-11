@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 interface VideoRecord {
   filename: string;
   absolute_path: string;
+  video_url: string;
   created_at: number;
 }
 
@@ -98,7 +99,7 @@ export default function Recordings() {
                 </CardHeader>
                 <CardContent className="mt-auto pt-0">
                   <Link
-                    to={`/editor/${encodeURIComponent(video.absolute_path)}`}
+                    to={`/editor/${encodeURIComponent(video.video_url)}`}
                     className="w-full text-sm font-medium underline"
                   >
                     Open in Editor

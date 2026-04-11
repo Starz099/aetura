@@ -89,7 +89,7 @@ async def load_dev_cache():
 
 @app.get("/library")
 async def get_library_videos():
-    """Returns absolute paths of all recorded videos."""
+    """Returns recorded videos with both local path and preview URL."""
     # Ensure the folder exists
     os.makedirs("recordings", exist_ok=True)
 
@@ -102,10 +102,12 @@ async def get_library_videos():
 
     videos = []
     for file_path in video_files:
+        filename = os.path.basename(file_path)
         videos.append(
             {
-                "filename": os.path.basename(file_path),
+                "filename": filename,
                 "absolute_path": file_path,
+                "video_url": f"http://localhost:8000/recordings/{filename}",
                 "created_at": os.path.getmtime(file_path),
             }
         )

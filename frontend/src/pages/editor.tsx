@@ -10,12 +10,24 @@ import {
 import { Button } from "@/components/ui";
 import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
+import { useEditorStore } from "@/assets/store/useEditorStore";
+import { EditorPreview } from "@/components/editor/preview";
+import { EditorTimeline } from "@/components/editor/timeline";
 
 const effectTools = ["Blur", "Zoom"];
 
 const EditorPage = () => {
   const { address } = useParams();
   const recordingUrl = address ? decodeURIComponent(address) : null;
+  const resetTimeline = useEditorStore((state) => state.resetTimeline);
+
+  const previewUrl = recordingUrl
+    ? recordingUrl.startsWith("http://") || recordingUrl.startsWith("https://")
+      ? recordingUrl
+      : `http://localhost:8000/recordings/${encodeURIComponent(
+          recordingUrl.split(/[\\/]/).pop() || "",
+        )}`
+    : null;
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -25,6 +37,10 @@ const EditorPage = () => {
       document.title = previousTitle;
     };
   }, []);
+
+  useEffect(() => {
+    resetTimeline();
+  }, [previewUrl, resetTimeline]);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-auto p-3 sm:p-4">
@@ -71,45 +87,9 @@ const EditorPage = () => {
           </section>
 
           <section className="flex min-h-0 flex-col gap-3">
-            <Card className="min-h-0 flex-1">
-              <CardHeader className="pb-2">
-                <CardTitle>Preview</CardTitle>
-                <CardDescription>
-                  Live output of your edited sequence.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex h-full min-h-0">
-                <div className="flex h-full min-h-90 w-full items-center justify-center rounded-md border-2 border-border/80 bg-muted/45 shadow-[0_3px_0_var(--shadow-soft)]">
-                  {recordingUrl ? (
-                    <video
-                      src={recordingUrl}
-                      controls
-                      className="h-full w-full rounded-md bg-black object-contain"
-                    />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Preview will appear after you load a recording.
-                    </p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <EditorPreview previewUrl={previewUrl} />
 
-            <Card size="sm">
-              <CardHeader className="pb-1">
-                <CardTitle>Timeline</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-24 rounded-md border-2 border-border/80 bg-muted/35 p-2 shadow-[0_3px_0_var(--shadow-soft)]">
-                  <div className="h-2 rounded-full bg-border" />
-                  <div className="mt-3 flex gap-2">
-                    <div className="h-8 w-1/3 rounded-sm bg-primary/25" />
-                    <div className="h-8 w-1/4 rounded-sm bg-secondary" />
-                    <div className="h-8 w-1/5 rounded-sm bg-accent" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <EditorTimeline />
           </section>
 
           <aside className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border-2 border-border bg-card p-2 shadow-[0_4px_0_var(--shadow-strong)]">
