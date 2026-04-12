@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/home";
 import Recordings from "./pages/recordings";
 import Editor from "./pages/editor";
+import Settings from "./pages/settings";
+import Footer from "./components/footer";
 
 const App = () => {
   return (
@@ -11,10 +13,12 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/recordings" element={<Recordings />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="/editor" element={<Editor />} />
             <Route path="/editor/:address" element={<Editor />} />
           </Routes>
         </main>
+        <Footer />
       </div>
     </BrowserRouter>
   );

@@ -86,7 +86,7 @@ const EditorPage = () => {
       <CardContent className="flex min-h-0 flex-1 p-0">
         <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[280px_minmax(0,1fr)_76px]">
           <section className="flex min-h-0 flex-col gap-3">
-            <Card size="sm" className="h-auto">
+            <Card size="sm" className="h-auto relative">
               <CardHeader className="pb-1">
                 <CardTitle>Project Info</CardTitle>
                 <CardDescription>Session details and source.</CardDescription>
@@ -103,9 +103,14 @@ const EditorPage = () => {
                   )}
                 </div>
               </CardContent>
+              <div className="absolute inset-0 z-10 bg-background/40 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Coming Soon
+                </span>
+              </div>
             </Card>
 
-            <Card className="min-h-0 flex-1">
+            <Card className="min-h-0 flex-1 relative">
               <CardHeader className="pb-1">
                 <CardTitle>AI Chat</CardTitle>
                 <CardDescription>
@@ -122,6 +127,11 @@ const EditorPage = () => {
                 />
                 <Button className="self-end">Send</Button>
               </CardContent>
+              <div className="absolute inset-0 z-10 bg-background/40 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                <span className="text-sm font-medium text-muted-foreground">
+                  Coming Soon
+                </span>
+              </div>
             </Card>
           </section>
 

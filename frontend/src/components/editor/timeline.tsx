@@ -1,14 +1,7 @@
 import { FastForward, Pause, Play, Rewind } from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
-import {
-  Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui";
+import { Button, Card, CardContent } from "@/components/ui";
 import { useEditorStore } from "@/store/useEditorStore";
 import { ZoomToolPanel } from "@/components/editor/tools";
 
@@ -133,12 +126,6 @@ export function EditorTimeline() {
 
   return (
     <Card size="sm" className="border-border/90 bg-muted/35">
-      <CardHeader className="pb-2">
-        <CardTitle>Timeline</CardTitle>
-        <CardDescription>
-          Scrub playback and place zoom effects on the track below.
-        </CardDescription>
-      </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           <Button
