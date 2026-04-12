@@ -10,6 +10,19 @@ export interface EditorEffect {
   multiplier: number;
 }
 
+export interface ExportEffect {
+  type: EditorEffectType;
+  startTime: number;
+  length: number;
+  multiplier: number;
+}
+
+export interface ExportRequest {
+  source: string;
+  duration: number;
+  effects: ExportEffect[];
+}
+
 const DEFAULT_ZOOM_LENGTH = 3;
 const DEFAULT_ZOOM_MULTIPLIER = 1.25;
 
@@ -101,6 +114,30 @@ const createDefaultZoomEffect = (
     },
     safeDuration,
   );
+};
+
+export const buildExportRequest = (
+  source: string,
+  duration: number,
+  effects: EditorEffect[],
+): ExportRequest => {
+  const safeDuration = Number.isFinite(duration) ? Math.max(duration, 0) : 0;
+
+  const normalizedEffects = effects
+    .map((effect) => clampEffect(effect, safeDuration))
+    .sort((a, b) => a.startTime - b.startTime)
+    .map((effect) => ({
+      type: effect.type,
+      startTime: effect.startTime,
+      length: effect.length,
+      multiplier: effect.multiplier,
+    }));
+
+  return {
+    source,
+    duration: safeDuration,
+    effects: normalizedEffects,
+  };
 };
 
 export const useEditorStore = create<EditorState>((set) => ({

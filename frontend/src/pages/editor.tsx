@@ -8,27 +8,65 @@ import {
   Textarea,
 } from "@/components/ui";
 import { Button } from "@/components/ui";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { useEditorStore } from "@/store/useEditorStore";
+import { buildExportRequest, useEditorStore } from "@/store/useEditorStore";
 import { EditorPreview } from "@/components/editor/preview";
 import { EditorTimeline } from "@/components/editor/timeline";
+import { invoke } from "@tauri-apps/api/core";
 
 const effectTools = ["Blur", "Zoom"];
 
 const EditorPage = () => {
   const { address } = useParams();
   const recordingUrl = address ? decodeURIComponent(address) : null;
+  const [exportState, setExportState] = useState<"idle" | "running" | "error">(
+    "idle",
+  );
+  const [exportMessage, setExportMessage] = useState("");
   const resetTimeline = useEditorStore((state) => state.resetTimeline);
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
+  const effects = useEditorStore((state) => state.effects);
+  const duration = useEditorStore((state) => state.duration);
 
-  const previewUrl = recordingUrl
-    ? recordingUrl.startsWith("http://") || recordingUrl.startsWith("https://")
-      ? recordingUrl
-      : `http://localhost:8000/recordings/${encodeURIComponent(
-          recordingUrl.split(/[\\/]/).pop() || "",
-        )}`
-    : null;
+  const previewUrl = useMemo(
+    () =>
+      recordingUrl
+        ? recordingUrl.startsWith("http://") ||
+          recordingUrl.startsWith("https://")
+          ? recordingUrl
+          : `http://localhost:8000/recordings/${encodeURIComponent(
+              recordingUrl.split(/[\\/]/).pop() || "",
+            )}`
+        : null,
+    [recordingUrl],
+  );
+
+  const handleExport = async () => {
+    if (!previewUrl) {
+      setExportState("error");
+      setExportMessage("No source video loaded.");
+      return;
+    }
+
+    setExportState("running");
+    setExportMessage("Rendering export...");
+
+    try {
+      const request = buildExportRequest(previewUrl, duration, effects);
+      const result = await invoke<{ outputPath: string }>("start_export", {
+        request,
+      });
+
+      setExportState("idle");
+      setExportMessage(`Export completed: ${result.outputPath}`);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to export video.";
+      setExportState("error");
+      setExportMessage(message);
+    }
+  };
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -115,9 +153,17 @@ const EditorPage = () => {
               size="icon"
               className="h-12 w-12 self-center"
               aria-label="Export video"
+              onClick={handleExport}
+              disabled={exportState === "running"}
             >
-              Export
+              {exportState === "running" ? "Busy" : "Export"}
             </Button>
+
+            {exportMessage ? (
+              <p className="text-[10px] leading-tight text-muted-foreground">
+                {exportMessage}
+              </p>
+            ) : null}
 
             <Separator className="my-0.5" />
 
