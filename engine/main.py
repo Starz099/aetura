@@ -25,12 +25,14 @@ app.mount("/recordings", StaticFiles(directory="recordings"), name="recordings")
 class ExploreRequest(BaseModel):
     url: str
     intent: str
+    grok_api_key: str
 
 
 class ResumeRequest(BaseModel):
     url: str
     intent: str
     approved_steps: List[Any]
+    grok_api_key: str
 
 
 class RecordRequest(BaseModel):
@@ -50,7 +52,11 @@ async def root():
 @app.post("/explore")
 async def explore_website(request: ExploreRequest):
     print(f"Received API request to explore: {request.url, request.intent}")
-    ai_result = await draft_demo_script(request.url, request.intent)
+    ai_result = await draft_demo_script(
+        request.url,
+        request.intent,
+        request.grok_api_key,
+    )
     with open("dev_cache.json", "w") as f:
         json.dump(ai_result, f)
 
@@ -61,7 +67,10 @@ async def explore_website(request: ExploreRequest):
 async def resume_website(request: ResumeRequest):
     print(f"Resuming script for: {request.url}")
     script_data = await resume_demo_script(
-        request.url, request.intent, request.approved_steps
+        request.url,
+        request.intent,
+        request.approved_steps,
+        request.grok_api_key,
     )
     return script_data
 

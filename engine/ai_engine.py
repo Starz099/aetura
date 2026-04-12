@@ -1,18 +1,13 @@
-import os
 from openai import AsyncOpenAI
-from dotenv import load_dotenv
-
-load_dotenv()
 
 
 class AIEngine:
-    def __init__(self):
-        api_key = os.environ.get("GROQ_API_KEY")
-        if not api_key:
-            raise ValueError("GROQ_API_KEY environment variable is missing.")
+    def __init__(self, api_key: str):
+        if not api_key or not api_key.strip():
+            raise ValueError("Grok API key is missing.")
 
         self.client = AsyncOpenAI(
-            api_key=api_key,
+            api_key=api_key.strip(),
             base_url="https://api.groq.com/openai/v1",
         )
         self.model = "llama-3.3-70b-versatile"

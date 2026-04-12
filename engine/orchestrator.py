@@ -47,10 +47,10 @@ def parse_dom_state(dom_string: str) -> list[DOMElement]:
     return elements
 
 
-async def draft_demo_script(url: str, intent: str) -> dict:
+async def draft_demo_script(url: str, intent: str, grok_api_key: str) -> dict:
     """Runs the audit and returns a structured DemoScript JSON for the React UI."""
     browser = BrowserEngine()
-    ai = AIEngine()
+    ai = AIEngine(grok_api_key)
 
     page = await browser.start(headless=False)
     print(f"Navigating to {url}...")
@@ -144,10 +144,15 @@ async def draft_demo_script(url: str, intent: str) -> dict:
     return final_script.model_dump()
 
 
-async def resume_demo_script(url: str, intent: str, approved_steps: list) -> dict:
+async def resume_demo_script(
+    url: str,
+    intent: str,
+    approved_steps: list,
+    grok_api_key: str,
+) -> dict:
     """Fast-forwards through approved steps, then lets AI finish the rest."""
     browser = BrowserEngine()
-    ai = AIEngine()
+    ai = AIEngine(grok_api_key)
 
     page = await browser.start(headless=False)
     print(f"Fast-forwarding to resume point for: {url}")

@@ -11,6 +11,7 @@ import { Button } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { buildExportRequest, useEditorStore } from "@/store/useEditorStore";
+import { useSettingsStore } from "@/store/useSettingsStore";
 import { EditorPreview } from "@/components/editor/preview";
 import { EditorTimeline } from "@/components/editor/timeline";
 import { invoke } from "@tauri-apps/api/core";
@@ -28,6 +29,9 @@ const EditorPage = () => {
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
   const effects = useEditorStore((state) => state.effects);
   const duration = useEditorStore((state) => state.duration);
+  const defaultExportDirectory = useSettingsStore(
+    (state) => state.defaultExportDirectory,
+  );
 
   const previewUrl = useMemo(
     () =>
@@ -56,6 +60,7 @@ const EditorPage = () => {
       const request = buildExportRequest(previewUrl, duration, effects);
       const result = await invoke<{ outputPath: string }>("start_export", {
         request,
+        defaultOutputDirectory: defaultExportDirectory.trim() || null,
       });
 
       setExportState("idle");

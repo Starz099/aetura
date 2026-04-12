@@ -105,11 +105,17 @@ fn resolve_ffmpeg_binary() -> PathBuf {
   PathBuf::from("ffmpeg")
 }
 
-fn pick_output_path(default_name: &str) -> Result<PathBuf, String> {
-  rfd::FileDialog::new()
+fn pick_output_path(default_name: &str, default_directory: Option<&Path>) -> Result<PathBuf, String> {
+  let mut dialog = rfd::FileDialog::new()
     .set_title("Export Video")
     .set_file_name(default_name)
-    .add_filter("MP4 Video", &["mp4"])
+    .add_filter("MP4 Video", &["mp4"]);
+
+  if let Some(directory) = default_directory {
+    dialog = dialog.set_directory(directory);
+  }
+
+  dialog
     .save_file()
     .ok_or_else(|| "Export cancelled before selecting output path.".to_string())
 }
@@ -125,11 +131,77 @@ fn derive_default_filename(source: &str) -> String {
 }
 
 #[tauri::command]
-fn start_export(app: tauri::AppHandle, request: ExportRequest) -> Result<ExportResult, String> {
+fn select_directory(initial_directory: Option<String>) -> Result<Option<String>, String> {
+  let mut dialog = rfd::FileDialog::new().set_title("Select Export Folder");
+
+  if let Some(path) = initial_directory
+    .map(|value| value.trim().to_string())
+    .filter(|value| !value.is_empty())
+    .map(PathBuf::from)
+    .filter(|path| path.exists() && path.is_dir())
+  {
+    dialog = dialog.set_directory(path);
+  }
+
+  Ok(
+    dialog
+      .pick_folder()
+      .map(|path| path.to_string_lossy().to_string()),
+  )
+}
+
+#[tauri::command]
+fn open_directory_in_explorer(directory: String) -> Result<(), String> {
+  let path = PathBuf::from(directory.trim());
+
+  if !path.exists() || !path.is_dir() {
+    return Err("The selected directory does not exist.".to_string());
+  }
+
+  #[cfg(target_os = "windows")]
+  let mut command = {
+    let mut cmd = Command::new("explorer");
+    cmd.arg(&path);
+    cmd
+  };
+
+  #[cfg(target_os = "macos")]
+  let mut command = {
+    let mut cmd = Command::new("open");
+    cmd.arg(&path);
+    cmd
+  };
+
+  #[cfg(all(unix, not(target_os = "macos")))]
+  let mut command = {
+    let mut cmd = Command::new("xdg-open");
+    cmd.arg(&path);
+    cmd
+  };
+
+  command
+    .spawn()
+    .map_err(|error| format!("Failed to open directory: {}", error))?;
+
+  Ok(())
+}
+
+#[tauri::command]
+fn start_export(
+  app: tauri::AppHandle,
+  request: ExportRequest,
+  default_output_directory: Option<String>,
+) -> Result<ExportResult, String> {
   validate_request(&request)?;
 
   let default_filename = derive_default_filename(&request.source);
-  let output_path = pick_output_path(&default_filename)?;
+  let default_directory = default_output_directory
+    .map(|path| path.trim().to_string())
+    .filter(|path| !path.is_empty())
+    .map(PathBuf::from)
+    .filter(|path| path.exists() && path.is_dir());
+
+  let output_path = pick_output_path(&default_filename, default_directory.as_deref())?;
   let output_path_string = output_path.to_string_lossy().to_string();
 
   let zoom_expression = build_zoom_expression(request.effects);
@@ -207,7 +279,11 @@ pub fn run() {
       }
       Ok(())
     })
-    .invoke_handler(tauri::generate_handler![start_export])
+    .invoke_handler(tauri::generate_handler![
+      start_export,
+      select_directory,
+      open_directory_in_explorer
+    ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }

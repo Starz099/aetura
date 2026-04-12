@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 import { useRef, useState } from "react";
+import { useSettingsStore } from "@/store/useSettingsStore";
 
 interface DOMElement {
   element_id: number;
@@ -54,6 +55,7 @@ function Home() {
   const [isPathBroken, setIsPathBroken] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
+  const grokApiKeys = useSettingsStore((state) => state.grokApiKeys);
 
   const handleClick = async () => {
     try {
@@ -68,6 +70,10 @@ function Home() {
   const handleClick2 = async () => {
     try {
       if (!urlRef.current || !intentRef.current) return;
+      if (grokApiKeys.length === 0) {
+        alert("Add a Grok API key in Settings before starting mapping.");
+        return;
+      }
 
       setLoading(true);
       setIsPathBroken(false);
@@ -81,6 +87,7 @@ function Home() {
         body: JSON.stringify({
           url: urlRef.current.value,
           intent: intentRef.current.value,
+          grok_api_key: grokApiKeys[0],
         }),
       });
 
@@ -98,6 +105,10 @@ function Home() {
 
   const handleResumeScript = async () => {
     if (!scriptData) return;
+    if (grokApiKeys.length === 0) {
+      alert("Add a Grok API key in Settings before resuming mapping.");
+      return;
+    }
 
     setLoading(true);
     try {
@@ -108,6 +119,7 @@ function Home() {
           url: scriptData.starting_url,
           intent: scriptData.goal,
           approved_steps: scriptData.steps,
+          grok_api_key: grokApiKeys[0],
         }),
       });
 
