@@ -1,7 +1,7 @@
 import os
 import glob
 import json
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from orchestrator import draft_demo_script, resume_demo_script, record_demo_video
@@ -52,11 +52,18 @@ async def root():
 @app.post("/explore")
 async def explore_website(request: ExploreRequest):
     print(f"Received API request to explore: {request.url, request.intent}")
-    ai_result = await draft_demo_script(
-        request.url,
-        request.intent,
-        request.grok_api_key,
-    )
+    try:
+        ai_result = await draft_demo_script(
+            request.url,
+            request.intent,
+            request.grok_api_key,
+        )
+    except Exception as error:
+        error_text = str(error).lower()
+        if "rate limit" in error_text or "429" in error_text:
+            raise HTTPException(status_code=429, detail=str(error)) from error
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
     with open("dev_cache.json", "w") as f:
         json.dump(ai_result, f)
 
@@ -66,19 +73,30 @@ async def explore_website(request: ExploreRequest):
 @app.post("/explore/resume")
 async def resume_website(request: ResumeRequest):
     print(f"Resuming script for: {request.url}")
-    script_data = await resume_demo_script(
-        request.url,
-        request.intent,
-        request.approved_steps,
-        request.grok_api_key,
-    )
+    try:
+        script_data = await resume_demo_script(
+            request.url,
+            request.intent,
+            request.approved_steps,
+            request.grok_api_key,
+        )
+    except Exception as error:
+        error_text = str(error).lower()
+        if "rate limit" in error_text or "429" in error_text:
+            raise HTTPException(status_code=429, detail=str(error)) from error
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
     return script_data
 
 
 @app.post("/record")
 async def record_website(request: RecordRequest):
     print(f"Received API request to record: {request.url}")
-    full_video_path = await record_demo_video(request.url, request.approved_steps)
+    try:
+        full_video_path = await record_demo_video(request.url, request.approved_steps)
+    except Exception as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+
     filename = os.path.basename(full_video_path)
     return {
         "status": "success",

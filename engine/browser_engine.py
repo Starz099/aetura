@@ -10,7 +10,10 @@ class BrowserEngine:
     async def start(self, headless=False):
         print("Starting Browser Engine...")
         self.playwright = await async_playwright().start()
-        self.browser = await self.playwright.chromium.launch(headless=headless)
+        self.browser = await self.playwright.chromium.launch(
+            headless=headless,
+            args=["--disable-gpu", "--disable-dev-shm-usage"],
+        )
         self.page = await self.browser.new_page()
         return self.page
 

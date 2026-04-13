@@ -19,6 +19,15 @@ from dom.parser import parse_dom_state
 from prompts import WorkflowPrompts
 
 
+WORKFLOW_TOOL_NAMES = {
+    "click_element",
+    "goto_url",
+    "scroll_page",
+    "hover_element",
+    "finish_task",
+}
+
+
 class MockFunction:
     """Mock tool function for creating tool call objects."""
     def __init__(self, name: str, arguments: Dict[str, Any]):
@@ -83,11 +92,144 @@ class Workflow(ABC):
         dom_state = await self._get_dom_state()
         parsed_dom = parse_dom_state(dom_state)
         return dom_state, parsed_dom
+
+    @staticmethod
+    def _summarize_progress(steps: List[Step], limit: int = 6) -> str:
+        """Summarize completed actions for the next model turn."""
+        if not steps:
+            return "No steps completed yet."
+
+        summaries = []
+        for step in steps[-limit:]:
+            action = step.action_taken
+            args = json.dumps(action.arguments, sort_keys=True)
+            summaries.append(
+                f"Step {step.step_number}: {action.tool_name}({args}) on {step.current_url}"
+            )
+
+        return "\n".join(summaries)
+
+    @staticmethod
+    def _format_dom_context(parsed_dom: List[DOMElement], limit: int = 18) -> str:
+        """Format a compact page summary for the model."""
+        if not parsed_dom:
+            return "No interactive elements found."
+
+        lines = []
+        if len(parsed_dom) > limit:
+            head_count = limit // 2
+            tail_count = limit - head_count
+            dom_slice = parsed_dom[:head_count] + parsed_dom[-tail_count:]
+        else:
+            dom_slice = parsed_dom
+
+        for element in dom_slice:
+            line = f"[ID {element.element_id}] {element.element_type}: {element.text}"
+            if element.href:
+                line += f" -> {element.href}"
+            lines.append(line)
+
+        if len(parsed_dom) > limit:
+            lines.insert(limit // 2, "... (middle elements omitted) ...")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _summarize_tool_result(result: Any, limit: int = 220) -> str:
+        """Keep tool results short so the memory log stays bounded."""
+        text = str(result).replace("\n", " ").strip()
+        if len(text) <= limit:
+            return text
+        return text[:limit].rstrip() + "..."
+
+    @staticmethod
+    def _trim_memory_entries(entries: List[str], keep_last: int = 6) -> List[str]:
+        """Keep only the most recent memory entries."""
+        if len(entries) <= keep_last:
+            return entries
+        return entries[-keep_last:]
+    
+    async def _page_snapshot(self, url: str, webpage_context: str) -> str:
+        """Create a progress signature using both DOM context and scroll state."""
+        scroll_signature = "scroll=unknown"
+        if self.page is not None:
+            try:
+                scroll = await self.page.evaluate(
+                    """
+                    () => {
+                        const y = Math.round(window.scrollY || 0);
+                        const max = Math.max(
+                            0,
+                            Math.round((document.documentElement.scrollHeight || document.body.scrollHeight || 0) - window.innerHeight)
+                        );
+                        const nearBottom = max > 0 ? y >= max - 24 : true;
+                        return `${y}/${max}/${nearBottom ? 1 : 0}`;
+                    }
+                    """
+                )
+                scroll_signature = f"scroll={scroll}"
+            except Exception:
+                pass
+
+        return f"{url}\n{scroll_signature}\n{webpage_context}"
+
+    @staticmethod
+    def _goal_requires_like_click(intent: str) -> bool:
+        """Detect whether the intent explicitly requires clicking like."""
+        lowered = intent.lower()
+        return "like" in lowered
+
+    @staticmethod
+    def _did_click_like(steps: List[Step]) -> bool:
+        """Check whether any click step targeted an element labeled like."""
+        for step in steps:
+            if step.action_taken.tool_name != "click_element":
+                continue
+
+            element_id = step.action_taken.arguments.get("element_id")
+            if element_id is None:
+                continue
+
+            for element in step.available_elements:
+                if element.element_id == element_id and "like" in element.text.lower():
+                    return True
+
+        return False
+
+    @staticmethod
+    def _normalize_tool_arguments(arguments: Any) -> Dict[str, Any]:
+        """Coerce model tool arguments into a plain dictionary."""
+        if isinstance(arguments, dict):
+            return arguments
+
+        if isinstance(arguments, str):
+            try:
+                parsed_arguments = json.loads(arguments)
+            except Exception:
+                return {}
+
+            return parsed_arguments if isinstance(parsed_arguments, dict) else {}
+
+        return {}
+
+    @staticmethod
+    def _tool_signature(tool_name: str, arguments: Dict[str, Any], url: str) -> str:
+        """Build a compact repeat-detection signature."""
+        return f"{url}::{tool_name}::{json.dumps(arguments, sort_keys=True)}"
+
+    @staticmethod
+    def _filter_workflow_tools(tools: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Limit the model to the small action set it actually needs."""
+        return [tool for tool in tools if tool.get("function", {}).get("name") in WORKFLOW_TOOL_NAMES]
     
     async def _get_ai_decision(self, system_prompt: str, user_prompt: str) -> Any:
         """Get AI decision on next action."""
         assert self.ai is not None, "AI engine not initialized"
-        return await self.ai.get_decision(system_prompt, user_prompt, AGENT_TOOLS)
+        return await self.ai.get_decision(
+            system_prompt,
+            user_prompt,
+            self._filter_workflow_tools(AGENT_TOOLS),
+        )
     
     async def _execute_tool_call(self, tool_call: Any) -> str:
         """Execute a tool call and return result."""
@@ -153,38 +295,57 @@ class DraftWorkflow(Workflow):
             await self._start_page(url, headless=False)
             
             max_steps = 20
+            max_attempts = max_steps * 3
             step_count = 0
-            memory = ""
+            attempt_count = 0
+            memory_entries: List[str] = []
             script_steps = []
+            previous_snapshot = ""
+            stagnant_count = 0
+            last_action_signature = ""
+            same_action_no_progress_count = 0
             
             while step_count < max_steps:
-                step_count += 1
-                print(f"\n--- Step {step_count} ---")
+                attempt_count += 1
+                if attempt_count > max_attempts:
+                    raise RuntimeError("Workflow stalled after too many attempts.")
+
+                next_step_number = step_count + 1
+                print(f"\n--- Step {next_step_number} ---")
                 
                 dom_state, parsed_dom = await self._extract_and_parse_dom()
                 system_prompt, user_prompt = WorkflowPrompts.get_draft_prompt(intent)
+                webpage_context = self._format_dom_context(parsed_dom)
+                progress_context = self._summarize_progress(script_steps)
                 
                 user_prompt += f"\n\nCurrent URL: {self.page.url}\n"
-                user_prompt += f"--- MEMORY LOG ---\n{memory if memory else 'No previous actions.'}\n"
-                user_prompt += f"--- CURRENT WEBPAGE ---\n{dom_state}\n"
+                user_prompt += f"--- COMPLETED STEPS ---\n{progress_context}\n"
+                user_prompt += (
+                    "--- MEMORY LOG ---\n"
+                    f"{chr(10).join(memory_entries) if memory_entries else 'No previous actions.'}\n"
+                )
+                user_prompt += f"--- CURRENT WEBPAGE ---\n{webpage_context}\n"
                 
                 try:
                     ai_response = await self._get_ai_decision(system_prompt, user_prompt)
                 except Exception as e:
                     print(f"API Error: {str(e)}")
-                    memory += f"\n- SYSTEM ERROR: Invalid response. Retrying.\n"
+                    memory_entries.append("- SYSTEM ERROR: Invalid response. Retrying.")
+                    memory_entries = self._trim_memory_entries(memory_entries)
                     await asyncio.sleep(1)
                     continue
                 
                 if ai_response.tool_calls:
                     tool_call = ai_response.tool_calls[0]
+                    args = self._normalize_tool_arguments(tool_call.function.arguments)
+                    action_signature = self._tool_signature(
+                        tool_call.function.name,
+                        args,
+                        self.page.url,
+                    )
+
                     action_result = await self._execute_tool_call(tool_call)
                     print(f"Action Result: {action_result}")
-                    
-                    try:
-                        args = json.loads(tool_call.function.arguments)
-                    except:
-                        args = {}
                     
                     action = Action(
                         tool_name=tool_call.function.name,
@@ -193,15 +354,52 @@ class DraftWorkflow(Workflow):
                     )
                     
                     step = Step(
-                        step_number=step_count,
+                        step_number=next_step_number,
                         current_url=self.page.url,
                         action_taken=action,
                         available_elements=parsed_dom
                     )
                     script_steps.append(step)
-                    memory += f"\n- Tool '{tool_call.function.name}' returned: {action_result}\n"
+                    memory_entries.append(
+                        f"- Tool '{tool_call.function.name}' returned: {self._summarize_tool_result(action_result)}"
+                    )
+                    memory_entries = self._trim_memory_entries(memory_entries)
+                    step_count = next_step_number
+
+                    # Re-read page state after the action to detect real progress.
+                    _, post_parsed_dom = await self._extract_and_parse_dom()
+                    post_context = self._format_dom_context(post_parsed_dom)
+                    current_snapshot = await self._page_snapshot(self.page.url, post_context)
+
+                    if action_signature == last_action_signature and current_snapshot == previous_snapshot:
+                        same_action_no_progress_count += 1
+                    else:
+                        same_action_no_progress_count = 0
+                    last_action_signature = action_signature
+                    
+                    if current_snapshot == previous_snapshot:
+                        stagnant_count += 1
+                    else:
+                        stagnant_count = 0
+                    previous_snapshot = current_snapshot
+
+                    if same_action_no_progress_count >= 3:
+                        print("Workflow stalled: repeating same action without progress.")
+                        break
+                    
+                    if stagnant_count >= 4:
+                        print("Workflow stalled: page state is not changing.")
+                        break
                     
                     if "FINISHED:" in action_result:
+                        if self._goal_requires_like_click(intent) and not self._did_click_like(script_steps):
+                            memory_entries.append(
+                                "- SYSTEM: finish_task rejected. You must click a Like button before finishing."
+                            )
+                            memory_entries = self._trim_memory_entries(memory_entries)
+                            await asyncio.sleep(1)
+                            continue
+
                         print("\nWorkflow completed successfully.")
                         break
                     
@@ -247,35 +445,55 @@ class ResumeWorkflow(Workflow):
             
             # Let AI continue from here
             max_steps = 15
+            max_attempts = max_steps * 3
+            attempt_count = 0
+            memory_entries: List[str] = []
+            previous_snapshot = ""
+            stagnant_count = 0
+            last_action_signature = ""
+            same_action_no_progress_count = 0
             print("\n[AI taking over for remaining steps...]")
             
             while step_count < max_steps:
-                step_count += 1
-                print(f"\n--- Step {step_count} (AI) ---")
+                attempt_count += 1
+                if attempt_count > max_attempts:
+                    raise RuntimeError("Workflow stalled after too many attempts.")
+
+                next_step_number = step_count + 1
+                print(f"\n--- Step {next_step_number} (AI) ---")
                 
                 dom_state, parsed_dom = await self._extract_and_parse_dom()
                 system_prompt, user_prompt = WorkflowPrompts.get_resume_prompt(intent, "Previous steps completed")
+                webpage_context = self._format_dom_context(parsed_dom)
+                progress_context = self._summarize_progress(script_steps)
                 
                 user_prompt += f"\n\nCurrent URL: {self.page.url}\n"
-                user_prompt += f"--- MEMORY LOG ---\n{memory if memory else 'No actions yet.'}\n"
-                user_prompt += f"--- CURRENT WEBPAGE ---\n{dom_state}\n"
+                user_prompt += f"--- COMPLETED STEPS ---\n{progress_context}\n"
+                user_prompt += (
+                    "--- MEMORY LOG ---\n"
+                    f"{chr(10).join(memory_entries) if memory_entries else 'No actions yet.'}\n"
+                )
+                user_prompt += f"--- CURRENT WEBPAGE ---\n{webpage_context}\n"
                 
                 try:
                     ai_response = await self._get_ai_decision(system_prompt, user_prompt)
                 except Exception as e:
                     print(f"API Error: {str(e)}")
-                    memory += f"\n- SYSTEM ERROR: Retrying.\n"
+                    memory_entries.append("- SYSTEM ERROR: Retrying.")
+                    memory_entries = self._trim_memory_entries(memory_entries)
                     await asyncio.sleep(1)
                     continue
                 
                 if ai_response.tool_calls:
                     tool_call = ai_response.tool_calls[0]
+                    args = self._normalize_tool_arguments(tool_call.function.arguments)
+                    action_signature = self._tool_signature(
+                        tool_call.function.name,
+                        args,
+                        self.page.url,
+                    )
+
                     action_result = await self._execute_tool_call(tool_call)
-                    
-                    try:
-                        args = json.loads(tool_call.function.arguments)
-                    except:
-                        args = {}
                     
                     action = Action(
                         tool_name=tool_call.function.name,
@@ -284,15 +502,52 @@ class ResumeWorkflow(Workflow):
                     )
                     
                     step = Step(
-                        step_number=step_count,
+                        step_number=next_step_number,
                         current_url=self.page.url,
                         action_taken=action,
                         available_elements=parsed_dom
                     )
                     script_steps.append(step)
-                    memory += f"\n- Tool '{tool_call.function.name}' returned: {action_result}\n"
+                    memory_entries.append(
+                        f"- Tool '{tool_call.function.name}' returned: {self._summarize_tool_result(action_result)}"
+                    )
+                    memory_entries = self._trim_memory_entries(memory_entries)
+                    step_count = next_step_number
+
+                    # Re-read page state after the action to detect real progress.
+                    _, post_parsed_dom = await self._extract_and_parse_dom()
+                    post_context = self._format_dom_context(post_parsed_dom)
+                    current_snapshot = await self._page_snapshot(self.page.url, post_context)
+
+                    if action_signature == last_action_signature and current_snapshot == previous_snapshot:
+                        same_action_no_progress_count += 1
+                    else:
+                        same_action_no_progress_count = 0
+                    last_action_signature = action_signature
+                    
+                    if current_snapshot == previous_snapshot:
+                        stagnant_count += 1
+                    else:
+                        stagnant_count = 0
+                    previous_snapshot = current_snapshot
+
+                    if same_action_no_progress_count >= 3:
+                        print("Workflow stalled: repeating same action without progress.")
+                        break
+                    
+                    if stagnant_count >= 4:
+                        print("Workflow stalled: page state is not changing.")
+                        break
                     
                     if "FINISHED:" in action_result:
+                        if self._goal_requires_like_click(intent) and not self._did_click_like(script_steps):
+                            memory_entries.append(
+                                "- SYSTEM: finish_task rejected. You must click a Like button before finishing."
+                            )
+                            memory_entries = self._trim_memory_entries(memory_entries)
+                            await asyncio.sleep(1)
+                            continue
+
                         break
                     
                     await self.page.wait_for_load_state("networkidle")
@@ -340,7 +595,10 @@ class RecordWorkflow(Workflow):
         from playwright.async_api import async_playwright
         
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False)
+            browser = await p.chromium.launch(
+                headless=False,
+                args=["--disable-gpu", "--disable-dev-shm-usage"],
+            )
             
             context = await browser.new_context(
                 viewport={"width": 1920, "height": 1080},

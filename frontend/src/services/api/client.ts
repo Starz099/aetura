@@ -22,6 +22,9 @@ export class APIClient {
   private timeout: number;
   private retryCount: number;
 
+  private static readonly MAPPING_TIMEOUT_MS = 180000;
+  private static readonly RECORDING_TIMEOUT_MS = 300000;
+
   constructor(
     baseUrl: string = "http://localhost:8000",
     timeout: number = 30000,
@@ -39,13 +42,19 @@ export class APIClient {
     method: string,
     endpoint: string,
     body?: Record<string, any>,
+    options?: {
+      timeoutMs?: number;
+      retries?: number;
+    },
   ): Promise<T> {
     let lastError: Error = new Error("Unknown error");
+    const timeoutMs = options?.timeoutMs ?? this.timeout;
+    const retries = options?.retries ?? this.retryCount;
 
-    for (let attempt = 0; attempt <= this.retryCount; attempt++) {
+    for (let attempt = 0; attempt <= retries; attempt++) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         const response = await fetch(`${this.baseUrl}${endpoint}`, {
           method,
@@ -81,7 +90,7 @@ export class APIClient {
         }
 
         // Wait before retrying (exponential backoff)
-        if (attempt < this.retryCount) {
+        if (attempt < retries) {
           await new Promise((resolve) =>
             setTimeout(resolve, Math.pow(2, attempt) * 1000),
           );
@@ -101,7 +110,10 @@ export class APIClient {
     const response = await this.request<{
       agent_message?: DemoScript;
       [key: string]: any;
-    }>("POST", "/explore", request);
+    }>("POST", "/explore", request, {
+      timeoutMs: APIClient.MAPPING_TIMEOUT_MS,
+      retries: 0,
+    });
 
     // Handle different response formats for backward compatibility
     const script = response.agent_message || response;
@@ -124,7 +136,10 @@ export class APIClient {
     const response = await this.request<{
       agent_message?: DemoScript;
       [key: string]: any;
-    }>("POST", "/explore/resume", request);
+    }>("POST", "/explore/resume", request, {
+      timeoutMs: APIClient.MAPPING_TIMEOUT_MS,
+      retries: 0,
+    });
 
     const script = response.agent_message || response;
 
@@ -145,6 +160,10 @@ export class APIClient {
       "POST",
       "/record",
       request,
+      {
+        timeoutMs: APIClient.RECORDING_TIMEOUT_MS,
+        retries: 0,
+      },
     );
 
     if (response.status === "error") {

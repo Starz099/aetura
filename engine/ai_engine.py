@@ -17,6 +17,8 @@ class AIEngine:
     ):
         api_params = {
             "model": self.model,
+            "temperature": 0.2,
+            "max_tokens": 400,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
