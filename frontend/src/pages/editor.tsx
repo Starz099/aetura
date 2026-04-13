@@ -8,23 +8,20 @@ import {
   Textarea,
 } from "@/components/ui";
 import { Button } from "@/components/ui";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
 import { buildExportRequest, useEditorStore } from "@/store/useEditorStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { EditorPreview } from "@/components/editor/preview";
 import { EditorTimeline } from "@/components/editor/timeline";
-import { invoke } from "@tauri-apps/api/core";
+import { useExport } from "@/services/export";
 
 const effectTools = ["Blur", "Zoom"];
 
 const EditorPage = () => {
   const { address } = useParams();
   const recordingUrl = address ? decodeURIComponent(address) : null;
-  const [exportState, setExportState] = useState<"idle" | "running" | "error">(
-    "idle",
-  );
-  const [exportMessage, setExportMessage] = useState("");
+  const { isExporting, message, export: handleExport } = useExport();
   const resetTimeline = useEditorStore((state) => state.resetTimeline);
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
   const effects = useEditorStore((state) => state.effects);
@@ -46,31 +43,14 @@ const EditorPage = () => {
     [recordingUrl],
   );
 
-  const handleExport = async () => {
+  const onExport = async () => {
     if (!previewUrl) {
-      setExportState("error");
-      setExportMessage("No source video loaded.");
+      alert("No source video loaded.");
       return;
     }
 
-    setExportState("running");
-    setExportMessage("Rendering export...");
-
-    try {
-      const request = buildExportRequest(previewUrl, duration, effects);
-      const result = await invoke<{ outputPath: string }>("start_export", {
-        request,
-        defaultOutputDirectory: defaultExportDirectory.trim() || null,
-      });
-
-      setExportState("idle");
-      setExportMessage(`Export completed: ${result.outputPath}`);
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to export video.";
-      setExportState("error");
-      setExportMessage(message);
-    }
+    const request = buildExportRequest(previewUrl, duration, effects);
+    await handleExport(request, defaultExportDirectory.trim() || null);
   };
 
   useEffect(() => {
@@ -168,15 +148,15 @@ const EditorPage = () => {
               size="icon"
               className="h-12 w-12 self-center"
               aria-label="Export video"
-              onClick={handleExport}
-              disabled={exportState === "running"}
+              onClick={onExport}
+              disabled={isExporting}
             >
-              {exportState === "running" ? "Busy" : "Export"}
+              {isExporting ? "Busy" : "Export"}
             </Button>
 
-            {exportMessage ? (
+            {message ? (
               <p className="text-[10px] leading-tight text-muted-foreground">
-                {exportMessage}
+                {message}
               </p>
             ) : null}
 

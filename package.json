@@ -7,7 +7,10 @@
   "scripts": {
     "dev:ui": "pnpm tauri dev",
     "dev:engine": "cd engine && ./venv/bin/uvicorn main:app --reload",
-    "dev": "concurrently \"pnpm run dev:engine\" \"pnpm run dev:ui\""
+    "dev": "concurrently \"pnpm run dev:engine\" \"pnpm run dev:ui\"",
+    "test": "pnpm run test:frontend && pnpm run test:tauri",
+    "test:frontend": "pnpm --dir frontend test",
+    "test:tauri": "cd src-tauri && cargo test"
   },
   "author": "",
   "license": "ISC",
