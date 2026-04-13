@@ -10,14 +10,18 @@ import {
   Separator,
 } from "@/components/ui";
 import { Input } from "@/components/ui/input";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { apiClient, type DemoScript, type Step } from "@/services/api";
 
 function Home() {
+  const navigate = useNavigate();
   const urlRef = useRef<HTMLInputElement>(null);
   const intentRef = useRef<HTMLInputElement>(null);
+  const startMappingInFlightRef = useRef(false);
+  const resumeInFlightRef = useRef(false);
+  const recordInFlightRef = useRef(false);
 
   const [scriptData, setScriptData] = useState<DemoScript | null>(null);
   const [editingStepIndex, setEditingStepIndex] = useState<number | null>(null);
@@ -38,6 +42,8 @@ function Home() {
   };
 
   const handleClick2 = async () => {
+    if (startMappingInFlightRef.current) return;
+
     try {
       if (!urlRef.current || !intentRef.current) return;
       if (grokApiKeys.length === 0) {
@@ -45,6 +51,7 @@ function Home() {
         return;
       }
 
+      startMappingInFlightRef.current = true;
       setLoading(true);
       setIsPathBroken(false);
       setFinalVideoUrl(null);
@@ -60,17 +67,20 @@ function Home() {
       console.error("Error starting mapping:", error);
       alert("Failed to start mapping. Check console for details.");
     } finally {
+      startMappingInFlightRef.current = false;
       setLoading(false);
     }
   };
 
   const handleResumeScript = async () => {
+    if (resumeInFlightRef.current || loading) return;
     if (!scriptData) return;
     if (grokApiKeys.length === 0) {
       alert("Add a Grok API key in Settings before resuming mapping.");
       return;
     }
 
+    resumeInFlightRef.current = true;
     setLoading(true);
     try {
       const updatedScript = await apiClient.resumeScript({
@@ -86,13 +96,16 @@ function Home() {
       console.error("Error resuming script:", error);
       alert("Failed to resume script. Check console for details.");
     } finally {
+      resumeInFlightRef.current = false;
       setLoading(false);
     }
   };
 
   const handleRecordScript = async () => {
+    if (recordInFlightRef.current || isRecording) return;
     if (!scriptData) return;
 
+    recordInFlightRef.current = true;
     setIsRecording(true);
     setFinalVideoUrl(null);
 
@@ -110,6 +123,7 @@ function Home() {
       console.error("Error recording video:", error);
       alert("Failed to record video. Check console for details.");
     } finally {
+      recordInFlightRef.current = false;
       setIsRecording(false);
     }
   };
@@ -222,7 +236,7 @@ function Home() {
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col gap-5 overflow-auto px-4 py-8">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-4xl flex-col gap-5 overflow-y-auto px-4 py-8 pb-20">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Home</h1>
@@ -279,116 +293,142 @@ function Home() {
       </Card>
 
       {scriptData && (
-        <Card className="mt-6 w-full">
+        <Card
+          className={`mt-6 flex w-full min-h-0 flex-col ${
+            finalVideoUrl ? "" : "max-h-[60vh]"
+          }`}
+        >
           <CardHeader>
             <CardTitle className="text-base">Generated Script</CardTitle>
             <CardDescription>Goal: {scriptData.goal}</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {scriptData.steps.map((step, index) => (
-              <div key={index} className="rounded-md border bg-card p-3">
-                <div className="flex justify-between items-center">
-                  <div className="flex flex-col">
-                    <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
-                      Step {step.step_number}
-                    </span>
-                    {renderStepDescription(step)}
-                  </div>
+          {!finalVideoUrl && (
+            <>
+              <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+                {scriptData.steps.map((step, index) => (
+                  <div key={index} className="rounded-md border bg-card p-3">
+                    <div className="flex justify-between items-center">
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">
+                          Step {step.step_number}
+                        </span>
+                        {renderStepDescription(step)}
+                      </div>
 
+                      <Button
+                        variant={
+                          editingStepIndex === index
+                            ? "destructive"
+                            : "secondary"
+                        }
+                        size="sm"
+                        onClick={() =>
+                          setEditingStepIndex(
+                            editingStepIndex === index ? null : index,
+                          )
+                        }
+                        disabled={isRecording}
+                      >
+                        {editingStepIndex === index ? "Cancel" : "Edit"}
+                      </Button>
+                    </div>
+
+                    {editingStepIndex === index && (
+                      <div className="mt-3 rounded-md border bg-muted p-3">
+                        <p className="mb-2 text-xs font-semibold text-destructive uppercase tracking-wider">
+                          Warning: Changing this deletes future steps!
+                        </p>
+                        <select
+                          className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
+                          value={step.action_taken.arguments?.element_id || ""}
+                          onChange={(e) =>
+                            handleElementChange(index, e.target.value)
+                          }
+                        >
+                          <option value="" disabled>
+                            Select a new target...
+                          </option>
+                          {step.available_elements.map((el) => (
+                            <option key={el.element_id} value={el.element_id}>
+                              [ID: {el.element_id}] {el.text}{" "}
+                              {el.href ? `(Goes to ${el.href})` : ""}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </CardContent>
+
+              <Separator />
+
+              {isPathBroken && (
+                <div className="mx-4 mt-4 rounded-md border bg-muted p-3">
+                  <p className="mb-3 text-sm font-semibold">
+                    Path diverged. You changed history and the AI needs to
+                    recalculate remaining steps.
+                  </p>
                   <Button
-                    variant={
-                      editingStepIndex === index ? "destructive" : "secondary"
-                    }
-                    size="sm"
-                    onClick={() =>
-                      setEditingStepIndex(
-                        editingStepIndex === index ? null : index,
-                      )
-                    }
-                    disabled={isRecording}
+                    className="w-full"
+                    onClick={handleResumeScript}
+                    disabled={loading || isRecording}
                   >
-                    {editingStepIndex === index ? "Cancel" : "Edit"}
+                    {loading ? "Re-calculating..." : "Generate Remaining Steps"}
                   </Button>
                 </div>
+              )}
 
-                {editingStepIndex === index && (
-                  <div className="mt-3 rounded-md border bg-muted p-3">
-                    <p className="mb-2 text-xs font-semibold text-destructive uppercase tracking-wider">
-                      Warning: Changing this deletes future steps!
-                    </p>
-                    <select
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
-                      value={step.action_taken.arguments?.element_id || ""}
-                      onChange={(e) =>
-                        handleElementChange(index, e.target.value)
-                      }
-                    >
-                      <option value="" disabled>
-                        Select a new target...
-                      </option>
-                      {step.available_elements.map((el) => (
-                        <option key={el.element_id} value={el.element_id}>
-                          [ID: {el.element_id}] {el.text}{" "}
-                          {el.href ? `(Goes to ${el.href})` : ""}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-              </div>
-            ))}
-          </CardContent>
-
-          <Separator />
-
-          {isPathBroken && (
-            <div className="mx-4 mt-4 rounded-md border bg-muted p-3">
-              <p className="mb-3 text-sm font-semibold">
-                Path diverged. You changed history and the AI needs to
-                recalculate remaining steps.
-              </p>
               <Button
-                className="w-full"
-                onClick={handleResumeScript}
-                disabled={loading || isRecording}
+                className="mx-4 mt-4"
+                size="lg"
+                onClick={handleRecordScript}
+                disabled={isPathBroken || loading || isRecording}
               >
-                {loading ? "Re-calculating..." : "Generate Remaining Steps"}
+                {isRecording ? "Recording Demo..." : "Confirm & Record Demo"}
               </Button>
-            </div>
-          )}
-
-          {!finalVideoUrl && (
-            <Button
-              className="mx-4 mt-4"
-              size="lg"
-              onClick={handleRecordScript}
-              disabled={isPathBroken || loading || isRecording}
-            >
-              {isRecording ? "Recording Demo..." : "Confirm & Record Demo"}
-            </Button>
+            </>
           )}
 
           {finalVideoUrl && (
-            <div className="mx-4 mt-4 rounded-md border bg-muted p-4 text-center">
-              <h3 className="mb-3 text-sm font-semibold">
-                Your AI demo is ready
-              </h3>
-              <video
-                src={finalVideoUrl}
-                controls
-                autoPlay
-                muted
-                playsInline
-                className="w-full rounded-md border"
-              />
-              <Button
-                variant="outline"
-                className="mt-4 w-full"
-                onClick={() => setFinalVideoUrl(null)}
-              >
-                Clear Video & Edit Script
-              </Button>
-            </div>
+            <CardContent className="p-4 sm:p-5">
+              <div className="rounded-md border bg-muted p-4 text-center">
+                <h3 className="mb-3 text-base font-semibold">
+                  Your AI demo is ready
+                </h3>
+                <div className="overflow-hidden rounded-md border bg-black/85">
+                  <video
+                    src={finalVideoUrl}
+                    controls
+                    autoPlay
+                    muted
+                    playsInline
+                    className="aspect-video max-h-[68vh] w-full object-contain"
+                  />
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                  <Button
+                    onClick={() =>
+                      navigate(`/editor/${encodeURIComponent(finalVideoUrl)}`)
+                    }
+                  >
+                    Open in Editor
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setFinalVideoUrl(null)}
+                  >
+                    View Script Again
+                  </Button>
+                  <Button asChild variant="secondary">
+                    <a href={finalVideoUrl} target="_blank" rel="noreferrer">
+                      Open Video File
+                    </a>
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
           )}
         </Card>
       )}

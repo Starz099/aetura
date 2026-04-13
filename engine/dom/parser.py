@@ -1,9 +1,19 @@
 """
-DOM parsing utilities for converting raw DOM JSON to structured models.
+DOM parsing utilities for converting raw DOM data to structured models.
 """
 import json
-from typing import List, Optional
+import re
+from typing import List
+
 from models.script import DOMElement
+
+
+LEGACY_DOM_LINE_RE = re.compile(
+    r'^\[ID:\s*(?P<element_id>\d+)\]\s*'
+    r'(?P<element_type>.+?)'
+    r'(?:\s+\[href="(?P<href>[^"]*)"\])?'
+    r'\s+-\s+"(?P<text>.*)"$'
+)
 
 
 def parse_dom_state(dom_string: str) -> List[DOMElement]:
@@ -20,10 +30,31 @@ def parse_dom_state(dom_string: str) -> List[DOMElement]:
         ValueError: If JSON is invalid or contains unexpected structure
         json.JSONDecodeError: If JSON parsing fails
     """
+    if not dom_string or not dom_string.strip():
+        return []
+
     try:
         raw_elements = json.loads(dom_string)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Failed to parse DOM JSON: {str(e)}")
+        raw_elements = []
+
+        for line in dom_string.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+
+            match = LEGACY_DOM_LINE_RE.match(line)
+            if not match:
+                raise ValueError(f"Failed to parse DOM JSON: {str(e)}")
+
+            raw_elements.append(
+                {
+                    "element_id": int(match.group("element_id")),
+                    "element_type": match.group("element_type"),
+                    "text": match.group("text"),
+                    "href": match.group("href") or None,
+                }
+            )
     
     if not isinstance(raw_elements, list):
         raise ValueError(f"Expected DOM to be a list, got {type(raw_elements).__name__}")

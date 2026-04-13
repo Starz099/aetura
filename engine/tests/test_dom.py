@@ -91,6 +91,26 @@ class TestParseDOMState:
         assert elements[0].element_id == 0
         assert elements[1].element_id == 1
 
+    def test_parse_legacy_dom_lines(self):
+        """Should parse the legacy human-readable DOM format."""
+        dom_text = (
+            '[ID: 1] button - "Submit"\n'
+            '[ID: 2] a [href="/blog"] - "Blog"\n'
+            '[ID: 3] input[type="text"] - "Search"'
+        )
+
+        elements = parse_dom_state(dom_text)
+
+        assert len(elements) == 3
+        assert elements[0].element_id == 1
+        assert elements[0].element_type == "button"
+        assert elements[1].href == "/blog"
+        assert elements[2].element_type == 'input[type="text"]'
+
+    def test_parse_empty_dom_returns_empty_list(self):
+        """Should return an empty list for an empty DOM string."""
+        assert parse_dom_state("") == []
+
 
 class TestMergeDOMStates:
     """Test DOM state merging."""
