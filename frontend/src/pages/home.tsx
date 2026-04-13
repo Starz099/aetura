@@ -13,37 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Link } from "react-router-dom";
 import { useRef, useState } from "react";
 import { useSettingsStore } from "@/store/useSettingsStore";
-
-interface DOMElement {
-  element_id: number;
-  element_type: string;
-  text: string;
-  href?: string;
-}
-
-interface Action {
-  tool_name: string;
-  arguments: {
-    element_id?: number;
-    url?: string;
-    text?: string;
-    direction?: string;
-  };
-  description: string;
-}
-
-interface Step {
-  step_number: number;
-  current_url: string;
-  action_taken: Action;
-  available_elements: DOMElement[];
-}
-
-interface DemoScript {
-  goal: string;
-  starting_url: string;
-  steps: Step[];
-}
+import { apiClient, type DemoScript, type Step } from "@/services/api";
 
 function Home() {
   const urlRef = useRef<HTMLInputElement>(null);
@@ -79,25 +49,16 @@ function Home() {
       setIsPathBroken(false);
       setFinalVideoUrl(null);
 
-      const response = await fetch("http://localhost:8000/explore", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          url: urlRef.current.value,
-          intent: intentRef.current.value,
-          grok_api_key: grokApiKeys[0],
-        }),
+      const scriptData = await apiClient.draftScript({
+        url: urlRef.current.value,
+        intent: intentRef.current.value,
+        grok_api_key: grokApiKeys[0],
       });
 
-      const rawData = await response.json();
-      const actualScriptData: DemoScript = rawData.agent_message
-        ? rawData.agent_message
-        : rawData;
-      setScriptData(actualScriptData);
+      setScriptData(scriptData);
     } catch (error) {
-      console.error("Error sending API call:", error);
+      console.error("Error starting mapping:", error);
+      alert("Failed to start mapping. Check console for details.");
     } finally {
       setLoading(false);
     }
@@ -112,26 +73,18 @@ function Home() {
 
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/explore/resume", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: scriptData.starting_url,
-          intent: scriptData.goal,
-          approved_steps: scriptData.steps,
-          grok_api_key: grokApiKeys[0],
-        }),
+      const updatedScript = await apiClient.resumeScript({
+        url: scriptData.starting_url,
+        intent: scriptData.goal,
+        approved_steps: scriptData.steps,
+        grok_api_key: grokApiKeys[0],
       });
 
-      const rawData = await response.json();
-      const actualScriptData: DemoScript = rawData.agent_message
-        ? rawData.agent_message
-        : rawData;
-
-      setScriptData(actualScriptData);
+      setScriptData(updatedScript);
       setIsPathBroken(false);
     } catch (error) {
       console.error("Error resuming script:", error);
+      alert("Failed to resume script. Check console for details.");
     } finally {
       setLoading(false);
     }
@@ -144,23 +97,18 @@ function Home() {
     setFinalVideoUrl(null);
 
     try {
-      const response = await fetch("http://localhost:8000/record", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          url: scriptData.starting_url,
-          approved_steps: scriptData.steps,
-        }),
+      const response = await apiClient.recordVideo({
+        url: scriptData.starting_url,
+        approved_steps: scriptData.steps,
       });
 
-      const data = await response.json();
-
-      if (data.status === "success") {
-        setFinalVideoUrl(data.video_url);
+      if (response.status === "success" && response.video_url) {
+        setFinalVideoUrl(response.video_url);
       }
-      console.log("Recording response:", data);
+      console.log("Recording response:", response);
     } catch (error) {
       console.error("Error recording video:", error);
+      alert("Failed to record video. Check console for details.");
     } finally {
       setIsRecording(false);
     }
@@ -232,7 +180,7 @@ function Home() {
 
     if (tool_name === "click_element" || tool_name === "hover_element") {
       const targetElement = step.available_elements.find(
-        (el) => el.element_id === args?.element_id,
+        (el: any) => el.element_id === args?.element_id,
       );
       targetDetails = targetElement
         ? `"${targetElement.text}"`
@@ -241,7 +189,7 @@ function Home() {
       targetDetails = args?.url || "";
     } else if (tool_name === "type_text") {
       const targetElement = step.available_elements.find(
-        (el) => el.element_id === args?.element_id,
+        (el: any) => el.element_id === args?.element_id,
       );
       const elName = targetElement
         ? `"${targetElement.text}"`

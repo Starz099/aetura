@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui";
 import { Link } from "react-router-dom";
+import { apiClient } from "@/services/api";
 
 interface VideoRecord {
   filename: string;
@@ -23,11 +24,11 @@ export default function Recordings() {
   const fetchLibrary = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:8000/library");
-      const data = await response.json();
+      const data = await apiClient.getLibrary();
       setVideos(data.videos);
     } catch (error) {
       console.error("Error fetching library:", error);
+      alert("Failed to fetch library. Check console for details.");
     } finally {
       setLoading(false);
     }
