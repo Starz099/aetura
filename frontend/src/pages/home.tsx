@@ -31,16 +31,6 @@ function Home() {
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const grokApiKeys = useSettingsStore((state) => state.grokApiKeys);
 
-  const handleClick = async () => {
-    try {
-      const response = await fetch("http://localhost:8000/");
-      const data = await response.json();
-      console.log(data);
-    } catch (error) {
-      console.error("Error sending API call:", error);
-    }
-  };
-
   const handleClick2 = async () => {
     if (startMappingInFlightRef.current) return;
 
@@ -240,57 +230,51 @@ function Home() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Home</h1>
-          <p className="mt-1 text-muted-foreground">
-            Map a navigation path from a URL and goal.
-          </p>
         </div>
         <Button asChild variant="outline" className="shrink-0">
           <Link to="/recordings">Go to Recordings</Link>
         </Button>
       </div>
 
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle className="text-base">Welcome to AETURA</CardTitle>
-          <CardDescription>
-            Use this workspace to generate, edit, and record a demo flow.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="url-input">Enter a URL</Label>
-            <Input
-              id="url-input"
-              ref={urlRef}
-              placeholder="Enter URL"
-              defaultValue="https://starzz.dev/"
-            />
-          </div>
+      {!scriptData && (
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle className="text-base">Welcome to AETURA</CardTitle>
+            <CardDescription>
+              Use this workspace to generate, record, and edit a demo flow.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="url-input">Enter a URL</Label>
+              <Input
+                id="url-input"
+                ref={urlRef}
+                placeholder="Enter URL"
+                defaultValue="https://starzz.dev/"
+              />
+            </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="intent-input">Enter an intent prompt</Label>
-            <Input
-              id="intent-input"
-              ref={intentRef}
-              placeholder="Enter intent"
-              defaultValue="go to the blog section and go the tura blog and then scroll down a little little until we reach the end of the page then click on the like button."
-            />
-          </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="intent-input">Enter an intent prompt</Label>
+              <Input
+                id="intent-input"
+                ref={intentRef}
+                placeholder="Enter intent"
+                defaultValue="go to the blog section and go the tura blog and then scroll down a little little until we reach the end of the page then click on the like button."
+              />
+            </div>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            <Button variant="outline" onClick={handleClick}>
-              Ping Server
-            </Button>
             <Button variant="outline" onClick={handleLoadMock}>
               Load Dev Cache
             </Button>
-          </div>
 
-          <Button onClick={handleClick2} disabled={loading || isRecording}>
-            {loading && !isPathBroken ? "Auditing Site..." : "Start Mapping"}
-          </Button>
-        </CardContent>
-      </Card>
+            <Button onClick={handleClick2} disabled={loading || isRecording}>
+              {loading && !isPathBroken ? "Auditing Site..." : "Start Mapping"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {scriptData && (
         <Card
@@ -298,10 +282,12 @@ function Home() {
             finalVideoUrl ? "" : "max-h-[60vh]"
           }`}
         >
-          <CardHeader>
-            <CardTitle className="text-base">Generated Script</CardTitle>
-            <CardDescription>Goal: {scriptData.goal}</CardDescription>
-          </CardHeader>
+          {!finalVideoUrl && (
+            <CardHeader>
+              <CardTitle className="text-base">Generated Script</CardTitle>
+              <CardDescription>Goal: {scriptData.goal}</CardDescription>
+            </CardHeader>
+          )}
           {!finalVideoUrl && (
             <>
               <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
@@ -407,7 +393,7 @@ function Home() {
                   />
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Button
                     onClick={() =>
                       navigate(`/editor/${encodeURIComponent(finalVideoUrl)}`)
@@ -420,11 +406,6 @@ function Home() {
                     onClick={() => setFinalVideoUrl(null)}
                   >
                     View Script Again
-                  </Button>
-                  <Button asChild variant="secondary">
-                    <a href={finalVideoUrl} target="_blank" rel="noreferrer">
-                      Open Video File
-                    </a>
                   </Button>
                 </div>
               </div>
