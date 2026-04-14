@@ -17,11 +17,37 @@ export interface ExportEffect {
   multiplier: number;
 }
 
+export type ExportDestination = "file";
+export type ExportFormat = "mp4" | "gif";
+export type ExportResolution = "720p" | "1080p" | "4k";
+export type ExportFps = 15 | 30 | 60;
+
+export interface ExportSettings {
+  destination: ExportDestination;
+  format: ExportFormat;
+  resolution: ExportResolution;
+  fps: ExportFps;
+  optimizeFileSize: boolean;
+}
+
 export interface ExportRequest {
   source: string;
   duration: number;
   effects: ExportEffect[];
+  destination: ExportDestination;
+  format: ExportFormat;
+  resolution: ExportResolution;
+  fps: ExportFps;
+  optimizeFileSize: boolean;
 }
+
+const defaultExportSettings: ExportSettings = {
+  destination: "file",
+  format: "mp4",
+  resolution: "1080p",
+  fps: 60,
+  optimizeFileSize: false,
+};
 
 const DEFAULT_ZOOM_LENGTH = 3;
 const DEFAULT_ZOOM_MULTIPLIER = 1.25;
@@ -120,8 +146,13 @@ export const buildExportRequest = (
   source: string,
   duration: number,
   effects: EditorEffect[],
+  settings?: Partial<ExportSettings>,
 ): ExportRequest => {
   const safeDuration = Number.isFinite(duration) ? Math.max(duration, 0) : 0;
+  const resolvedSettings = {
+    ...defaultExportSettings,
+    ...settings,
+  };
 
   const normalizedEffects = effects
     .map((effect) => clampEffect(effect, safeDuration))
@@ -137,6 +168,11 @@ export const buildExportRequest = (
     source,
     duration: safeDuration,
     effects: normalizedEffects,
+    destination: resolvedSettings.destination,
+    format: resolvedSettings.format,
+    resolution: resolvedSettings.resolution,
+    fps: resolvedSettings.fps,
+    optimizeFileSize: resolvedSettings.optimizeFileSize,
   };
 };
 

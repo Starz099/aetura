@@ -1,5 +1,4 @@
 import {
-  Badge,
   Card,
   CardContent,
   CardDescription,
@@ -11,19 +10,30 @@ import {
 import { Button } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { buildExportRequest, useEditorStore } from "@/store/useEditorStore";
+import {
+  buildExportRequest,
+  type ExportFormat,
+  type ExportResolution,
+  useEditorStore,
+} from "@/store/useEditorStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { EditorPreview } from "@/components/editor/preview";
 import { EditorTimeline } from "@/components/editor/timeline";
 import { useExport } from "@/services/export";
 
 const effectTools = ["Zoom"];
+const selectedOptionClass =
+  "!border-primary/60 !bg-primary/10 !text-primary shadow-[0_2px_0_var(--shadow-soft)]";
 
 const EditorPage = () => {
   const { address } = useParams();
   const recordingUrl = address ? decodeURIComponent(address) : null;
   const { isExporting, message, export: handleExport } = useExport();
   const [showExportSettings, setShowExportSettings] = useState(false);
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("mp4");
+  const [selectedResolution, setSelectedResolution] =
+    useState<ExportResolution>("1080p");
+  const [selectedFps, setSelectedFps] = useState<15 | 30 | 60>(60);
   const resetTimeline = useEditorStore((state) => state.resetTimeline);
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
   const effects = useEditorStore((state) => state.effects);
@@ -51,8 +61,12 @@ const EditorPage = () => {
       return;
     }
 
-    const request = buildExportRequest(previewUrl, duration, effects);
-    await handleExport(request, defaultExportDirectory.trim() || null);
+    const exportRequest = buildExportRequest(previewUrl, duration, effects, {
+      format: selectedFormat,
+      resolution: selectedResolution,
+      fps: selectedFps,
+    });
+    await handleExport(exportRequest, defaultExportDirectory.trim() || null);
   };
 
   const onOpenExportSettings = () => {
@@ -99,13 +113,6 @@ const EditorPage = () => {
               Export Demo
             </h1>
           </div>
-          <Button
-            variant="outline"
-            onClick={() => setShowExportSettings(false)}
-            disabled={isExporting}
-          >
-            Back to Editor
-          </Button>
         </div>
 
         <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_420px]">
@@ -113,8 +120,7 @@ const EditorPage = () => {
             <EditorPreview
               key={previewUrl ?? "export-preview"}
               previewUrl={previewUrl}
-              autoPlay
-              showMuteToggle
+              thumbnailMode
             />
           </section>
 
@@ -122,50 +128,116 @@ const EditorPage = () => {
             <CardHeader className="border-b py-3">
               <CardTitle>Export Settings</CardTitle>
               <CardDescription>
-                Placeholder controls for destination, format, and quality.
+                Placeholder controls inspired by CapCut-style export flow.
               </CardDescription>
             </CardHeader>
 
             <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto py-4">
-              <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/35 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">Destination</span>
-                  <Badge variant="secondary">File</Badge>
+              <section className="space-y-2">
+                <p className="text-sm font-medium">Destination</p>
+                <div
+                  className={`h-12 rounded-md border-2 ${selectedOptionClass} flex items-center justify-center bg-card px-4 text-sm font-semibold`}
+                >
+                  File
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  This area will hold output location choices.
+                <p className="text-[11px] text-muted-foreground">
+                  File export is enabled. Other destinations will be added
+                  later.
                 </p>
-              </div>
+              </section>
 
-              <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/35 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">Format</span>
-                  <Badge variant="outline">MP4</Badge>
+              <section className="space-y-2">
+                <p className="text-sm font-medium">Format</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    className={`h-11 ${
+                      selectedFormat === "mp4" ? selectedOptionClass : ""
+                    }`}
+                    onClick={() => setSelectedFormat("mp4")}
+                  >
+                    MP4
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className={`h-11 ${
+                      selectedFormat === "gif" ? selectedOptionClass : ""
+                    }`}
+                    onClick={() => setSelectedFormat("gif")}
+                  >
+                    GIF
+                  </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Format options will be added here later.
-                </p>
-              </div>
+              </section>
 
-              <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/35 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium">Quality</span>
-                  <Badge variant="secondary">Web</Badge>
+              <section className="space-y-2">
+                <p className="text-sm font-medium">Resolution</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    variant="outline"
+                    className={`h-11 ${
+                      selectedResolution === "720p" ? selectedOptionClass : ""
+                    }`}
+                    onClick={() => setSelectedResolution("720p")}
+                  >
+                    720p
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className={`h-11 ${
+                      selectedResolution === "1080p" ? selectedOptionClass : ""
+                    }`}
+                    onClick={() => setSelectedResolution("1080p")}
+                  >
+                    1080p
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className={`h-11 ${
+                      selectedResolution === "4k" ? selectedOptionClass : ""
+                    }`}
+                    onClick={() => setSelectedResolution("4k")}
+                  >
+                    4K
+                  </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Keep this screen focused on the preview and export flow for
-                  now.
-                </p>
-              </div>
+              </section>
+
+              <section className="space-y-2">
+                <p className="text-sm font-medium">Frame Rate</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    variant="outline"
+                    className={`h-11 ${selectedFps === 15 ? selectedOptionClass : ""}`}
+                    onClick={() => setSelectedFps(15)}
+                  >
+                    15
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className={`h-11 ${selectedFps === 30 ? selectedOptionClass : ""}`}
+                    onClick={() => setSelectedFps(30)}
+                  >
+                    30
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className={`h-11 ${selectedFps === 60 ? selectedOptionClass : ""}`}
+                    onClick={() => setSelectedFps(60)}
+                  >
+                    60
+                  </Button>
+                </div>
+              </section>
 
               <div className="rounded-md border border-border bg-muted/25 p-3 text-xs text-muted-foreground">
                 {message
                   ? message
-                  : "Confirm to start exporting the current edit."}
+                  : `Selected: FILE • ${selectedFormat.toUpperCase()} • ${selectedResolution.toUpperCase()} • ${selectedFps} FPS.`}
               </div>
             </CardContent>
 
-            <div className="border-t p-3">
+            <div className="space-y-2 border-t p-3">
               <Button
                 className="w-full"
                 size="lg"
@@ -173,6 +245,14 @@ const EditorPage = () => {
                 disabled={isExporting}
               >
                 {isExporting ? "Exporting..." : "Export to File"}
+              </Button>
+              <Button
+                variant="ghost"
+                className="w-full"
+                onClick={() => setShowExportSettings(false)}
+                disabled={isExporting}
+              >
+                Back to Editor
               </Button>
             </div>
           </aside>

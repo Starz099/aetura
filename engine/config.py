@@ -31,8 +31,8 @@ class WorkflowConfig:
     
     # Recording settings
     frame_quality: int = 100
-    frame_rate: int = 30
-    video_crf: int = 12  # Quality (0=lossless, 51=worst)
+    frame_rate: int = 60
+    video_crf: int = 4  # Quality (0=lossless, 51=worst)
 
 
 @dataclass

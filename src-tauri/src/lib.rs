@@ -9,6 +9,14 @@ mod validation;
 use models::{ExportRequest, ExportResult};
 use tauri::Emitter;
 
+fn resolution_tag(resolution: &models::ExportResolution) -> &'static str {
+    match resolution {
+        models::ExportResolution::P720 => "720p",
+        models::ExportResolution::P1080 => "1080p",
+        models::ExportResolution::P4k => "4k",
+    }
+}
+
 /// Start the export process
 /// 
 /// This command:
@@ -27,23 +35,40 @@ fn start_export(
     validation::validate_request(&request).map_err(|e| e.message())?;
 
     // Get output path from user
-    let default_filename = dialogs::derive_default_filename(&request.source);
+    let format_extension = match request.format {
+        models::ExportFormat::Gif => "gif",
+        models::ExportFormat::Mp4 => "mp4",
+    };
+    let settings_suffix = format!("{}-{}fps", resolution_tag(&request.resolution), request.fps);
+    let default_filename =
+        dialogs::derive_default_filename(&request.source, &settings_suffix, format_extension);
+    let _destination_mode = match request.destination {
+        models::ExportDestination::File => "file",
+        models::ExportDestination::Clipboard => "clipboard",
+    };
     let default_directory = default_output_directory
         .map(|path| path.trim().to_string())
         .filter(|path| !path.is_empty())
         .map(std::path::PathBuf::from)
         .filter(|path| path.exists() && path.is_dir());
 
-    let output_path = dialogs::pick_output_path(&default_filename, default_directory.as_deref())
+    let mut output_path = dialogs::pick_output_path(
+        &default_filename,
+        format_extension,
+        default_directory.as_deref(),
+    )
         .map_err(|e| e.message())?;
+
+    // Enforce extension to match selected format even if the dialog returns a stale extension.
+    output_path.set_extension(format_extension);
     let output_path_string = output_path.to_string_lossy().to_string();
 
     // Build FFmpeg filter graph
-    let zoom_expression = filters::build_zoom_expression(request.effects);
+    let zoom_expression = filters::build_zoom_expression(request.effects.clone());
     let filter_graph = filters::build_filter_graph(&zoom_expression);
 
     // Execute FFmpeg
-    ffmpeg::execute_ffmpeg(&request.source, &filter_graph, &output_path_string)
+    ffmpeg::execute_ffmpeg(&request, &filter_graph, &output_path_string)
         .map_err(|e| e.message())?;
 
     // Emit success event

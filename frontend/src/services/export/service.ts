@@ -17,6 +17,10 @@ export interface ExportRequest {
   source: string;
   duration: number;
   effects: EditorExportRequest["effects"];
+  format: EditorExportRequest["format"];
+  resolution: EditorExportRequest["resolution"];
+  fps: EditorExportRequest["fps"];
+  optimizeFileSize: EditorExportRequest["optimizeFileSize"];
   outputDirectory?: string | null;
 }
 
@@ -33,6 +37,10 @@ export class ExportService {
           source: request.source,
           duration: request.duration,
           effects: request.effects,
+          format: request.format,
+          resolution: request.resolution,
+          fps: request.fps,
+          optimizeFileSize: request.optimizeFileSize,
         },
         defaultOutputDirectory: request.outputDirectory?.trim() || null,
       });
@@ -58,13 +66,15 @@ export class ExportService {
       throw new Error("Source is required");
     }
 
-    if (request.duration <= 0) {
-      throw new Error("Duration must be greater than 0");
+    if (request.duration < 0) {
+      throw new Error("Duration must be a non-negative number");
     }
 
     if (!Array.isArray(request.effects)) {
       throw new Error("Effects must be an array");
     }
+
+    // Setting-level validation is handled by the Tauri backend.
   }
 }
 

@@ -1,6 +1,49 @@
 /// Data models for export functionality
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ExportDestination {
+    File,
+    Clipboard,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ExportFormat {
+    Mp4,
+    Gif,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+pub enum ExportResolution {
+    #[serde(rename = "720p")]
+    P720,
+    #[serde(rename = "1080p")]
+    P1080,
+    #[serde(rename = "4k")]
+    P4k,
+}
+
+fn default_destination() -> ExportDestination {
+    ExportDestination::File
+}
+
+fn default_format() -> ExportFormat {
+    ExportFormat::Mp4
+}
+
+fn default_resolution() -> ExportResolution {
+    ExportResolution::P1080
+}
+
+fn default_fps() -> u32 {
+    60
+}
+fn default_optimize_file_size() -> bool {
+    false
+}
+
 /// Represents a single visual effect applied during export
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -26,6 +69,21 @@ pub struct ExportRequest {
     pub duration: f64,
     /// List of effects to apply
     pub effects: Vec<ExportEffect>,
+    /// Export destination mode
+    #[serde(default = "default_destination")]
+    pub destination: ExportDestination,
+    /// Output format
+    #[serde(default = "default_format")]
+    pub format: ExportFormat,
+    /// Target resolution
+    #[serde(default = "default_resolution")]
+    pub resolution: ExportResolution,
+    /// Target frame rate
+    #[serde(default = "default_fps")]
+    pub fps: u32,
+    /// Slower encode for smaller file size
+    #[serde(default = "default_optimize_file_size")]
+    pub optimize_file_size: bool,
 }
 
 /// Result of successful export
@@ -45,6 +103,11 @@ mod tests {
         let value = serde_json::json!({
             "source": "/videos/input.mp4",
             "duration": 12.5,
+            "destination": "file",
+            "format": "mp4",
+            "resolution": "1080p",
+            "fps": 60,
+            "optimizeFileSize": false,
             "effects": [
                 {
                     "type": "zoom",
@@ -59,6 +122,11 @@ mod tests {
 
         assert_eq!(request.source, "/videos/input.mp4");
         assert_eq!(request.duration, 12.5);
+        assert_eq!(request.destination, ExportDestination::File);
+        assert_eq!(request.format, ExportFormat::Mp4);
+        assert_eq!(request.resolution, ExportResolution::P1080);
+        assert_eq!(request.fps, 60);
+        assert!(!request.optimize_file_size);
         assert_eq!(request.effects.len(), 1);
         assert_eq!(request.effects[0].effect_type, "zoom");
         assert_eq!(request.effects[0].start_time, 1.0);
