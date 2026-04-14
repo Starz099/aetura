@@ -7,12 +7,14 @@ interface EditorPreviewProps {
   previewUrl: string | null;
   autoPlay?: boolean;
   showMuteToggle?: boolean;
+  thumbnailMode?: boolean;
 }
 
 export function EditorPreview({
   previewUrl,
   autoPlay = false,
   showMuteToggle = false,
+  thumbnailMode = false,
 }: EditorPreviewProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isMuted, setIsMuted] = useState(true);
@@ -33,6 +35,10 @@ export function EditorPreview({
   const zoomScale = activeZoomEffect?.multiplier ?? 1;
 
   useEffect(() => {
+    if (autoPlay || thumbnailMode) {
+      return;
+    }
+
     const video = videoRef.current;
 
     if (!video) {
@@ -42,9 +48,13 @@ export function EditorPreview({
     if (Math.abs(video.currentTime - currentTime) > 0.05) {
       video.currentTime = currentTime;
     }
-  }, [currentTime]);
+  }, [autoPlay, thumbnailMode, currentTime]);
 
   useEffect(() => {
+    if (thumbnailMode) {
+      return;
+    }
+
     const video = videoRef.current;
 
     if (!video) {
@@ -63,7 +73,42 @@ export function EditorPreview({
     if (!shouldPlay && !video.paused) {
       video.pause();
     }
-  }, [autoPlay, isPlaying, setIsPlaying]);
+  }, [autoPlay, isPlaying, setIsPlaying, thumbnailMode]);
+
+  useEffect(() => {
+    if (!autoPlay || thumbnailMode) {
+      return;
+    }
+
+    const video = videoRef.current;
+
+    if (!video) {
+      return;
+    }
+
+    // Ensure export preview always starts playing when opened.
+    video.currentTime = 0;
+    void video.play().catch(() => {
+      // Ignore autoplay interruptions; user can still unmute/play manually.
+    });
+  }, [autoPlay, previewUrl, thumbnailMode]);
+
+  useEffect(() => {
+    if (!thumbnailMode) {
+      return;
+    }
+
+    const video = videoRef.current;
+
+    if (!video) {
+      return;
+    }
+
+    video.pause();
+    video.currentTime = 0;
+    setCurrentTime(0);
+    setIsPlaying(false);
+  }, [thumbnailMode, previewUrl, setCurrentTime, setIsPlaying]);
 
   return (
     <Card className="min-h-0 flex-1">
@@ -83,10 +128,15 @@ export function EditorPreview({
                 <video
                   ref={videoRef}
                   src={previewUrl}
+                  autoPlay={autoPlay}
+                  playsInline
                   muted={isMuted}
                   className="h-full w-full rounded-md bg-black object-contain"
                   onLoadedMetadata={(event) => {
                     setDuration(event.currentTarget.duration);
+                    if (thumbnailMode) {
+                      event.currentTarget.currentTime = 0;
+                    }
                   }}
                   onTimeUpdate={(event) => {
                     setCurrentTime(event.currentTarget.currentTime);
@@ -95,7 +145,7 @@ export function EditorPreview({
                   onPause={() => setIsPlaying(false)}
                 />
               </div>
-              {showMuteToggle ? (
+              {showMuteToggle && !thumbnailMode ? (
                 <Button
                   type="button"
                   variant="secondary"

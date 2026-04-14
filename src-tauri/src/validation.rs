@@ -7,6 +7,17 @@ pub fn validate_request(request: &ExportRequest) -> Result<(), AppError> {
     validate_source(&request.source)?;
     validate_duration(request.duration)?;
     validate_effects(&request.effects, request.duration)?;
+    validate_settings(request)?;
+    Ok(())
+}
+
+fn validate_settings(request: &ExportRequest) -> Result<(), AppError> {
+    if !matches!(request.fps, 15 | 30 | 60) {
+        return Err(AppError::ValidationError(
+            "Frame rate must be one of: 15, 30, 60.".to_string(),
+        ));
+    }
+
     Ok(())
 }
 
@@ -84,6 +95,11 @@ mod tests {
             source: "".to_string(),
             duration: 10.0,
             effects: vec![],
+            destination: crate::models::ExportDestination::File,
+            format: crate::models::ExportFormat::Mp4,
+            resolution: crate::models::ExportResolution::P1080,
+            fps: 60,
+            optimize_file_size: false,
         };
         assert!(validate_request(&request).is_err());
     }
@@ -94,6 +110,11 @@ mod tests {
             source: "test.mp4".to_string(),
             duration: -1.0,
             effects: vec![],
+            destination: crate::models::ExportDestination::File,
+            format: crate::models::ExportFormat::Mp4,
+            resolution: crate::models::ExportResolution::P1080,
+            fps: 60,
+            optimize_file_size: false,
         };
         assert!(validate_request(&request).is_err());
     }
@@ -104,7 +125,27 @@ mod tests {
             source: "test.mp4".to_string(),
             duration: 10.0,
             effects: vec![],
+            destination: crate::models::ExportDestination::File,
+            format: crate::models::ExportFormat::Mp4,
+            resolution: crate::models::ExportResolution::P1080,
+            fps: 60,
+            optimize_file_size: false,
         };
         assert!(validate_request(&request).is_ok());
+    }
+
+    #[test]
+    fn test_validate_invalid_fps() {
+        let request = ExportRequest {
+            source: "test.mp4".to_string(),
+            duration: 10.0,
+            effects: vec![],
+            destination: crate::models::ExportDestination::File,
+            format: crate::models::ExportFormat::Mp4,
+            resolution: crate::models::ExportResolution::P1080,
+            fps: 24,
+            optimize_file_size: false,
+        };
+        assert!(validate_request(&request).is_err());
     }
 }

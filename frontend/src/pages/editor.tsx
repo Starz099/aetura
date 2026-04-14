@@ -10,7 +10,12 @@ import {
 import { Button } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { buildExportRequest, useEditorStore } from "@/store/useEditorStore";
+import {
+  buildExportRequest,
+  type ExportFormat,
+  type ExportResolution,
+  useEditorStore,
+} from "@/store/useEditorStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { EditorPreview } from "@/components/editor/preview";
 import { EditorTimeline } from "@/components/editor/timeline";
@@ -19,10 +24,6 @@ import { useExport } from "@/services/export";
 const effectTools = ["Zoom"];
 const selectedOptionClass =
   "!border-primary/60 !bg-primary/10 !text-primary shadow-[0_2px_0_var(--shadow-soft)]";
-
-type ExportFormat = "mp4" | "gif";
-type ExportResolution = "720p" | "1080p" | "4k";
-type ExportQuality = "potato" | "web" | "social" | "maximum";
 
 const EditorPage = () => {
   const { address } = useParams();
@@ -33,7 +34,6 @@ const EditorPage = () => {
   const [selectedResolution, setSelectedResolution] =
     useState<ExportResolution>("1080p");
   const [selectedFps, setSelectedFps] = useState<15 | 30 | 60>(60);
-  const [selectedQuality, setSelectedQuality] = useState<ExportQuality>("web");
   const resetTimeline = useEditorStore((state) => state.resetTimeline);
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
   const effects = useEditorStore((state) => state.effects);
@@ -61,8 +61,12 @@ const EditorPage = () => {
       return;
     }
 
-    const request = buildExportRequest(previewUrl, duration, effects);
-    await handleExport(request, defaultExportDirectory.trim() || null);
+    const exportRequest = buildExportRequest(previewUrl, duration, effects, {
+      format: selectedFormat,
+      resolution: selectedResolution,
+      fps: selectedFps,
+    });
+    await handleExport(exportRequest, defaultExportDirectory.trim() || null);
   };
 
   const onOpenExportSettings = () => {
@@ -116,8 +120,7 @@ const EditorPage = () => {
             <EditorPreview
               key={previewUrl ?? "export-preview"}
               previewUrl={previewUrl}
-              autoPlay
-              showMuteToggle
+              thumbnailMode
             />
           </section>
 
@@ -132,20 +135,15 @@ const EditorPage = () => {
             <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto py-4">
               <section className="space-y-2">
                 <p className="text-sm font-medium">Destination</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button
-                    variant="outline"
-                    className={`h-12 ${selectedOptionClass}`}
-                  >
-                    File
-                  </Button>
-                  <Button variant="outline" className="h-12">
-                    Clipboard
-                  </Button>
-                  <Button variant="outline" className="h-12">
-                    Shareable Link
-                  </Button>
+                <div
+                  className={`h-12 rounded-md border-2 ${selectedOptionClass} flex items-center justify-center bg-card px-4 text-sm font-semibold`}
+                >
+                  File
                 </div>
+                <p className="text-[11px] text-muted-foreground">
+                  File export is enabled. Other destinations will be added
+                  later.
+                </p>
               </section>
 
               <section className="space-y-2">
@@ -232,63 +230,10 @@ const EditorPage = () => {
                 </div>
               </section>
 
-              <section className="space-y-2">
-                <p className="text-sm font-medium">Quality</p>
-                <div className="grid grid-cols-4 gap-2">
-                  <Button
-                    variant="outline"
-                    className={`h-11 px-1 ${
-                      selectedQuality === "potato" ? selectedOptionClass : ""
-                    }`}
-                    onClick={() => setSelectedQuality("potato")}
-                  >
-                    Potato
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className={`h-11 px-1 ${
-                      selectedQuality === "web" ? selectedOptionClass : ""
-                    }`}
-                    onClick={() => setSelectedQuality("web")}
-                  >
-                    Web
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className={`h-11 px-1 ${
-                      selectedQuality === "social" ? selectedOptionClass : ""
-                    }`}
-                    onClick={() => setSelectedQuality("social")}
-                  >
-                    Social
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className={`h-11 px-1 ${
-                      selectedQuality === "maximum" ? selectedOptionClass : ""
-                    }`}
-                    onClick={() => setSelectedQuality("maximum")}
-                  >
-                    Maximum
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>Smaller file</span>
-                  <span>Larger file</span>
-                </div>
-              </section>
-
-              <section className="space-y-2">
-                <p className="text-sm font-medium">Advanced Options</p>
-                <div className="rounded-md border border-dashed border-border bg-muted/30 p-3 text-xs text-muted-foreground">
-                  Advanced export controls will be added in the next phase.
-                </div>
-              </section>
-
               <div className="rounded-md border border-border bg-muted/25 p-3 text-xs text-muted-foreground">
                 {message
                   ? message
-                  : `Selected: ${selectedFormat.toUpperCase()} • ${selectedResolution.toUpperCase()} • ${selectedFps} FPS • ${selectedQuality.toUpperCase()} (backend wiring in next phase).`}
+                  : `Selected: FILE • ${selectedFormat.toUpperCase()} • ${selectedResolution.toUpperCase()} • ${selectedFps} FPS.`}
               </div>
             </CardContent>
 

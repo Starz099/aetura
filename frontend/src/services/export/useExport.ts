@@ -31,6 +31,10 @@ export function useExport() {
           source: request.source,
           duration: request.duration,
           effects: request.effects,
+          format: request.format,
+          resolution: request.resolution,
+          fps: request.fps,
+          optimizeFileSize: request.optimizeFileSize,
           outputDirectory,
         });
 
