@@ -1,4 +1,5 @@
 import {
+  Badge,
   Card,
   CardContent,
   CardDescription,
@@ -8,7 +9,7 @@ import {
   Textarea,
 } from "@/components/ui";
 import { Button } from "@/components/ui";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { buildExportRequest, useEditorStore } from "@/store/useEditorStore";
 import { useSettingsStore } from "@/store/useSettingsStore";
@@ -16,12 +17,13 @@ import { EditorPreview } from "@/components/editor/preview";
 import { EditorTimeline } from "@/components/editor/timeline";
 import { useExport } from "@/services/export";
 
-const effectTools = ["Blur", "Zoom"];
+const effectTools = ["Zoom"];
 
 const EditorPage = () => {
   const { address } = useParams();
   const recordingUrl = address ? decodeURIComponent(address) : null;
   const { isExporting, message, export: handleExport } = useExport();
+  const [showExportSettings, setShowExportSettings] = useState(false);
   const resetTimeline = useEditorStore((state) => state.resetTimeline);
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
   const effects = useEditorStore((state) => state.effects);
@@ -53,6 +55,15 @@ const EditorPage = () => {
     await handleExport(request, defaultExportDirectory.trim() || null);
   };
 
+  const onOpenExportSettings = () => {
+    if (!previewUrl) {
+      alert("No source video loaded.");
+      return;
+    }
+
+    setShowExportSettings(true);
+  };
+
   useEffect(() => {
     const previousTitle = document.title;
     document.title = "Aetura Editor";
@@ -65,6 +76,110 @@ const EditorPage = () => {
   useEffect(() => {
     resetTimeline();
   }, [previewUrl, resetTimeline]);
+
+  useEffect(() => {
+    if (!showExportSettings) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showExportSettings]);
+
+  if (showExportSettings) {
+    return (
+      <div className="flex h-full min-h-0 w-full flex-col overflow-hidden bg-background p-3 sm:p-4">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              Export Demo
+            </h1>
+          </div>
+          <Button
+            variant="outline"
+            onClick={() => setShowExportSettings(false)}
+            disabled={isExporting}
+          >
+            Back to Editor
+          </Button>
+        </div>
+
+        <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_420px]">
+          <section className="min-h-0">
+            <EditorPreview
+              key={previewUrl ?? "export-preview"}
+              previewUrl={previewUrl}
+              autoPlay
+              showMuteToggle
+            />
+          </section>
+
+          <aside className="flex min-h-0 flex-col overflow-hidden rounded-lg border-2 border-border bg-card shadow-[0_4px_0_var(--shadow-strong)]">
+            <CardHeader className="border-b py-3">
+              <CardTitle>Export Settings</CardTitle>
+              <CardDescription>
+                Placeholder controls for destination, format, and quality.
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto py-4">
+              <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/35 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">Destination</span>
+                  <Badge variant="secondary">File</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This area will hold output location choices.
+                </p>
+              </div>
+
+              <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/35 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">Format</span>
+                  <Badge variant="outline">MP4</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Format options will be added here later.
+                </p>
+              </div>
+
+              <div className="space-y-2 rounded-md border border-dashed border-border bg-muted/35 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium">Quality</span>
+                  <Badge variant="secondary">Web</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Keep this screen focused on the preview and export flow for
+                  now.
+                </p>
+              </div>
+
+              <div className="rounded-md border border-border bg-muted/25 p-3 text-xs text-muted-foreground">
+                {message
+                  ? message
+                  : "Confirm to start exporting the current edit."}
+              </div>
+            </CardContent>
+
+            <div className="border-t p-3">
+              <Button
+                className="w-full"
+                size="lg"
+                onClick={onExport}
+                disabled={isExporting}
+              >
+                {isExporting ? "Exporting..." : "Export to File"}
+              </Button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col overflow-auto p-3 sm:p-4">
@@ -132,14 +247,14 @@ const EditorPage = () => {
               variant="outline"
               className="h-8 w-12 px-0 text-[10px]"
             >
-              <Link to="/recordings">Rec</Link>
+              <Link to="/">Home</Link>
             </Button>
             <Button
               asChild
               variant="outline"
               className="h-8 w-12 px-0 text-[10px]"
             >
-              <Link to="/">Home</Link>
+              <Link to="/recordings">Rec</Link>
             </Button>
 
             <Separator className="my-0.5" />
@@ -148,7 +263,7 @@ const EditorPage = () => {
               size="icon"
               className="h-12 w-12 self-center"
               aria-label="Export video"
-              onClick={onExport}
+              onClick={onOpenExportSettings}
               disabled={isExporting}
             >
               {isExporting ? "Busy" : "Export"}
@@ -176,7 +291,7 @@ const EditorPage = () => {
                   }}
                   disabled={tool !== "Zoom"}
                 >
-                  {tool.slice(0, 3)}
+                  {tool}
                 </Button>
               ))}
             </div>

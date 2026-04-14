@@ -1,14 +1,21 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import { Card, CardContent } from "@/components/ui";
+import { Button, Card, CardContent } from "@/components/ui";
 import { useEditorStore } from "@/store/useEditorStore";
 
 interface EditorPreviewProps {
   previewUrl: string | null;
+  autoPlay?: boolean;
+  showMuteToggle?: boolean;
 }
 
-export function EditorPreview({ previewUrl }: EditorPreviewProps) {
+export function EditorPreview({
+  previewUrl,
+  autoPlay = false,
+  showMuteToggle = false,
+}: EditorPreviewProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isMuted, setIsMuted] = useState(true);
   const currentTime = useEditorStore((state) => state.currentTime);
   const isPlaying = useEditorStore((state) => state.isPlaying);
   const activeZoomEffect = useEditorStore(
@@ -44,17 +51,19 @@ export function EditorPreview({ previewUrl }: EditorPreviewProps) {
       return;
     }
 
-    if (isPlaying && video.paused) {
+    const shouldPlay = autoPlay || isPlaying;
+
+    if (shouldPlay && video.paused) {
       void video.play().catch(() => {
         setIsPlaying(false);
       });
       return;
     }
 
-    if (!isPlaying && !video.paused) {
+    if (!shouldPlay && !video.paused) {
       video.pause();
     }
-  }, [isPlaying, setIsPlaying]);
+  }, [autoPlay, isPlaying, setIsPlaying]);
 
   return (
     <Card className="min-h-0 flex-1">
@@ -74,6 +83,7 @@ export function EditorPreview({ previewUrl }: EditorPreviewProps) {
                 <video
                   ref={videoRef}
                   src={previewUrl}
+                  muted={isMuted}
                   className="h-full w-full rounded-md bg-black object-contain"
                   onLoadedMetadata={(event) => {
                     setDuration(event.currentTarget.duration);
@@ -85,6 +95,17 @@ export function EditorPreview({ previewUrl }: EditorPreviewProps) {
                   onPause={() => setIsPlaying(false)}
                 />
               </div>
+              {showMuteToggle ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="absolute bottom-3 right-3 z-10 h-8 rounded-full px-3 text-[11px] shadow-[0_2px_0_var(--shadow-soft)]"
+                  onClick={() => setIsMuted((current) => !current)}
+                >
+                  {isMuted ? "Unmute" : "Mute"}
+                </Button>
+              ) : null}
             </>
           ) : (
             <p className="text-sm text-muted-foreground">
