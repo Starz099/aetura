@@ -80,6 +80,21 @@ class TestOrchestrationService:
         
         assert response.success is False
         assert response.error_code == "INVALID_STEPS"
+
+    @pytest.mark.asyncio
+    async def test_record_video_validation_invalid_recording_settings(self):
+        """Should reject non-dict recording settings."""
+        service = OrchestrationService()
+        request = RecordRequest(
+            url="https://example.com",
+            approved_steps=[{"action_taken": {"tool_name": "click_element", "arguments": {}}}],
+            recording_settings="invalid",
+        )
+
+        response = await service.record_video(request)
+
+        assert response.success is False
+        assert response.error_code == "INVALID_RECORDING_SETTINGS"
     
     @pytest.mark.asyncio
     @patch('engine.services.DraftWorkflow')
@@ -133,10 +148,17 @@ class TestOrchestrationService:
         service = OrchestrationService()
         request = RecordRequest(
             url="https://example.com",
-            approved_steps=[{"action_taken": {"tool_name": "click_element", "arguments": {}}}]
+            approved_steps=[{"action_taken": {"tool_name": "click_element", "arguments": {}}}],
+            recording_settings={"capture_fps": 30},
         )
         
         response = await service.record_video(request)
+        
+        mock_workflow.execute.assert_awaited_once_with(
+            url="https://example.com",
+            approved_steps=[{"action_taken": {"tool_name": "click_element", "arguments": {}}}],
+            recording_settings={"capture_fps": 30},
+        )
         
         # Response handling structure is demonstrated
 

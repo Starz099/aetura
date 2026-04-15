@@ -1,5 +1,6 @@
 import signal
 import asyncio
+from typing import Any, Dict, Optional
 from workflows import DraftWorkflow, ResumeWorkflow, RecordWorkflow
 
 
@@ -41,17 +42,22 @@ async def resume_demo_script(
     return await workflow.execute(url, intent, approved_steps, grok_api_key)
 
 
-async def record_demo_video(url: str, approved_steps: list) -> str:
+async def record_demo_video(
+    url: str,
+    approved_steps: list,
+    recording_settings: Optional[Dict[str, Any]] = None,
+) -> str:
     """
     Record a demo video of automation steps.
     
     Args:
         url: Starting URL
         approved_steps: Steps to record
+        recording_settings: Optional recording quality configuration
         
     Returns:
         Path to recorded video file
     """
     workflow = RecordWorkflow()
-    return await workflow.execute(url, approved_steps)
+    return await workflow.execute(url, approved_steps, recording_settings)
 

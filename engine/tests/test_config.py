@@ -11,6 +11,7 @@ from engine.config import (
     get_config,
     setup_logging,
 )
+from engine.workflows import _sanitize_recording_settings
 
 
 class TestWorkflowConfig:
@@ -134,3 +135,40 @@ class TestConfigGlobal:
         config2 = get_config()
         
         assert config1 is config2
+
+
+class TestRecordingSettingsSanitization:
+    """Test recording settings normalization and bounds."""
+
+    def test_defaults_when_settings_missing(self):
+        """Should return defaults when payload is absent."""
+        settings = _sanitize_recording_settings(None)
+
+        assert settings["capture_fps"] == 30
+        assert settings["viewport_width"] == 1920
+        assert settings["viewport_height"] == 1080
+        assert settings["output_preset"] == "medium"
+        assert settings["output_crf"] == 12
+        assert settings["device_scale_factor"] == 3
+
+    def test_clamps_and_filters_invalid_values(self):
+        """Should clamp the allowed numeric fields and ignore invalid preset."""
+        settings = _sanitize_recording_settings(
+            {
+                "capture_fps": 120,
+                "viewport_width": 5000,
+                "viewport_height": 100,
+                "output_preset": "invalid",
+            }
+        )
+
+        assert settings["capture_fps"] == 30
+        assert settings["viewport_width"] == 3840
+        assert settings["viewport_height"] == 360
+        assert settings["output_preset"] == "medium"
+        assert settings["capture_frame_quality"] == 100
+        assert settings["capture_every_nth_frame"] == 1
+        assert settings["device_scale_factor"] == 3
+        assert settings["output_crf"] == 12
+        assert settings["output_profile"] == "main"
+        assert settings["output_pix_fmt"] == "yuv420p"

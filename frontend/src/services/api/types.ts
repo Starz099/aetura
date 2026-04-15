@@ -49,9 +49,28 @@ export interface ResumeScriptRequest {
   grok_api_key: string;
 }
 
+export type RecordingPreset =
+  | "ultrafast"
+  | "superfast"
+  | "veryfast"
+  | "faster"
+  | "fast"
+  | "medium"
+  | "slow"
+  | "slower"
+  | "veryslow";
+
+export interface RecordingSettingsRequest {
+  capture_fps?: 15 | 30 | 60;
+  viewport_width?: number;
+  viewport_height?: number;
+  output_preset?: RecordingPreset;
+}
+
 export interface RecordVideoRequest {
   url: string;
   approved_steps: Step[];
+  recording_settings?: RecordingSettingsRequest;
 }
 
 export interface LibraryRequest {

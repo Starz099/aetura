@@ -34,6 +34,7 @@ class RecordRequest:
     """Request to record a demo video."""
     url: str
     approved_steps: List[Dict[str, Any]]
+    recording_settings: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -217,6 +218,16 @@ class OrchestrationService:
                     error="At least one step is required for recording",
                     error_code="INVALID_STEPS"
                 )
+
+            if (
+                request.recording_settings is not None
+                and not isinstance(request.recording_settings, dict)
+            ):
+                return OrchestrationResponse(
+                    success=False,
+                    error="Recording settings must be a dictionary",
+                    error_code="INVALID_RECORDING_SETTINGS",
+                )
             
             self.logger.info(f"Recording video with {len(request.approved_steps)} steps")
             
@@ -224,7 +235,8 @@ class OrchestrationService:
             workflow = RecordWorkflow()
             video_path = await workflow.execute(
                 url=request.url,
-                approved_steps=request.approved_steps
+                approved_steps=request.approved_steps,
+                recording_settings=request.recording_settings,
             )
             
             self.logger.info(f"Video recorded successfully: {video_path}")

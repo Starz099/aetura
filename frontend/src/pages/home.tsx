@@ -30,6 +30,9 @@ function Home() {
   const [isRecording, setIsRecording] = useState(false);
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
   const grokApiKeys = useSettingsStore((state) => state.grokApiKeys);
+  const recordingSettings = useSettingsStore(
+    (state) => state.recordingSettings,
+  );
 
   const handleClick2 = async () => {
     if (startMappingInFlightRef.current) return;
@@ -103,6 +106,12 @@ function Home() {
       const response = await apiClient.recordVideo({
         url: scriptData.starting_url,
         approved_steps: scriptData.steps,
+        recording_settings: {
+          capture_fps: recordingSettings.captureFps,
+          viewport_width: recordingSettings.viewportWidth,
+          viewport_height: recordingSettings.viewportHeight,
+          output_preset: recordingSettings.outputPreset,
+        },
       });
 
       if (response.status === "success" && response.video_url) {
