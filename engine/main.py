@@ -3,9 +3,9 @@ import glob
 import json
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from orchestrator import draft_demo_script, resume_demo_script, record_demo_video
-from typing import List, Any
+from typing import List, Any, Optional, Literal, Dict
 from fastapi.staticfiles import StaticFiles
 
 os.makedirs("recordings", exist_ok=True)
@@ -35,9 +35,41 @@ class ResumeRequest(BaseModel):
     grok_api_key: str
 
 
+class RecordingSettingsRequest(BaseModel):
+    capture_fps: Optional[Literal[15, 30, 60]] = None
+    viewport_width: Optional[int] = Field(default=None, ge=640, le=3840)
+    viewport_height: Optional[int] = Field(default=None, ge=360, le=2160)
+    output_preset: Optional[
+        Literal[
+            "ultrafast",
+            "superfast",
+            "veryfast",
+            "faster",
+            "fast",
+            "medium",
+            "slow",
+            "slower",
+            "veryslow",
+        ]
+    ] = None
+
+
+def _dump_recording_settings(
+    settings: Optional[RecordingSettingsRequest],
+) -> Optional[Dict[str, Any]]:
+    if settings is None:
+        return None
+
+    if hasattr(settings, "model_dump"):
+        return settings.model_dump(exclude_none=True)
+
+    return settings.dict(exclude_none=True)
+
+
 class RecordRequest(BaseModel):
     url: str
     approved_steps: List[Any]
+    recording_settings: Optional[RecordingSettingsRequest] = None
 
 
 @app.get("/")
@@ -93,7 +125,11 @@ async def resume_website(request: ResumeRequest):
 async def record_website(request: RecordRequest):
     print(f"Received API request to record: {request.url}")
     try:
-        full_video_path = await record_demo_video(request.url, request.approved_steps)
+        full_video_path = await record_demo_video(
+            request.url,
+            request.approved_steps,
+            _dump_recording_settings(request.recording_settings),
+        )
     except Exception as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
 

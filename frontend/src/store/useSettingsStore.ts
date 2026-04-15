@@ -1,6 +1,31 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+export type RecordingPreset =
+  | "ultrafast"
+  | "superfast"
+  | "veryfast"
+  | "faster"
+  | "fast"
+  | "medium"
+  | "slow"
+  | "slower"
+  | "veryslow";
+
+export interface RecordingSettings {
+  captureFps: 15 | 30 | 60;
+  viewportWidth: number;
+  viewportHeight: number;
+  outputPreset: RecordingPreset;
+}
+
+export const defaultRecordingSettings: RecordingSettings = {
+  captureFps: 30,
+  viewportWidth: 1920,
+  viewportHeight: 1080,
+  outputPreset: "medium",
+};
+
 const normalizeApiKeys = (keys: string[]) => {
   const seen = new Set<string>();
   const normalized: string[] = [];
@@ -22,11 +47,14 @@ const normalizeApiKeys = (keys: string[]) => {
 interface SettingsState {
   defaultExportDirectory: string;
   grokApiKeys: string[];
+  recordingSettings: RecordingSettings;
 
   setDefaultExportDirectory: (path: string) => void;
   setGrokApiKeys: (keys: string[]) => void;
   addGrokApiKey: (key: string) => void;
   removeGrokApiKey: (key: string) => void;
+  updateRecordingSettings: (settings: Partial<RecordingSettings>) => void;
+  resetRecordingSettings: () => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
@@ -34,6 +62,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       defaultExportDirectory: "",
       grokApiKeys: [],
+      recordingSettings: defaultRecordingSettings,
 
       setDefaultExportDirectory: (path: string) =>
         set({ defaultExportDirectory: path.trim() }),
@@ -47,6 +76,15 @@ export const useSettingsStore = create<SettingsState>()(
         set((state) => ({
           grokApiKeys: state.grokApiKeys.filter((stored) => stored !== key),
         })),
+      updateRecordingSettings: (settings: Partial<RecordingSettings>) =>
+        set((state) => ({
+          recordingSettings: {
+            ...state.recordingSettings,
+            ...settings,
+          },
+        })),
+      resetRecordingSettings: () =>
+        set({ recordingSettings: defaultRecordingSettings }),
     }),
     {
       name: "aetura-settings",
@@ -54,6 +92,7 @@ export const useSettingsStore = create<SettingsState>()(
       partialize: (state) => ({
         defaultExportDirectory: state.defaultExportDirectory,
         grokApiKeys: state.grokApiKeys,
+        recordingSettings: state.recordingSettings,
       }),
     },
   ),

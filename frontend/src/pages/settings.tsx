@@ -1,5 +1,8 @@
 import { Button, Input } from "@/components/ui";
-import { useSettingsStore } from "@/store/useSettingsStore";
+import {
+  type RecordingPreset,
+  useSettingsStore,
+} from "@/store/useSettingsStore";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CaretLeftIcon } from "@phosphor-icons/react";
@@ -15,8 +18,26 @@ const Settings = () => {
   const grokApiKeys = useSettingsStore((state) => state.grokApiKeys);
   const addGrokApiKey = useSettingsStore((state) => state.addGrokApiKey);
   const removeGrokApiKey = useSettingsStore((state) => state.removeGrokApiKey);
+  const recordingSettings = useSettingsStore(
+    (state) => state.recordingSettings,
+  );
+  const updateRecordingSettings = useSettingsStore(
+    (state) => state.updateRecordingSettings,
+  );
+  const resetRecordingSettings = useSettingsStore(
+    (state) => state.resetRecordingSettings,
+  );
   const [grokKeyInput, setGrokKeyInput] = useState("");
   const [exportPathMessage, setExportPathMessage] = useState("");
+
+  const clampNumber = (value: string, min: number, max: number) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return min;
+    }
+
+    return Math.min(max, Math.max(min, Math.round(parsed)));
+  };
 
   const handleAddGrokKey = () => {
     addGrokApiKey(grokKeyInput);
@@ -131,6 +152,109 @@ const Settings = () => {
                 ))
               )}
             </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">Recording Quality</h2>
+                <p className="text-sm text-muted-foreground">
+                  Configure capture and encoding variables used for demo
+                  recording.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={resetRecordingSettings}
+              >
+                Reset Defaults
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span className="text-muted-foreground">Capture FPS</span>
+                <select
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={recordingSettings.captureFps}
+                  onChange={(event) =>
+                    updateRecordingSettings({
+                      captureFps: Number(event.target.value) as 15 | 30 | 60,
+                    })
+                  }
+                >
+                  <option value={15}>15</option>
+                  <option value={30}>30</option>
+                  <option value={60}>60</option>
+                </select>
+              </label>
+
+              <label className="space-y-1 text-sm">
+                <span className="text-muted-foreground">
+                  Viewport Width (640-3840)
+                </span>
+                <Input
+                  type="number"
+                  min={640}
+                  max={3840}
+                  value={recordingSettings.viewportWidth}
+                  onChange={(event) =>
+                    updateRecordingSettings({
+                      viewportWidth: clampNumber(event.target.value, 640, 3840),
+                    })
+                  }
+                />
+              </label>
+
+              <label className="space-y-1 text-sm">
+                <span className="text-muted-foreground">
+                  Viewport Height (360-2160)
+                </span>
+                <Input
+                  type="number"
+                  min={360}
+                  max={2160}
+                  value={recordingSettings.viewportHeight}
+                  onChange={(event) =>
+                    updateRecordingSettings({
+                      viewportHeight: clampNumber(
+                        event.target.value,
+                        360,
+                        2160,
+                      ),
+                    })
+                  }
+                />
+              </label>
+
+              <label className="space-y-1 text-sm">
+                <span className="text-muted-foreground">Output Preset</span>
+                <select
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={recordingSettings.outputPreset}
+                  onChange={(event) =>
+                    updateRecordingSettings({
+                      outputPreset: event.target.value as RecordingPreset,
+                    })
+                  }
+                >
+                  <option value="ultrafast">ultrafast</option>
+                  <option value="superfast">superfast</option>
+                  <option value="veryfast">veryfast</option>
+                  <option value="faster">faster</option>
+                  <option value="fast">fast</option>
+                  <option value="medium">medium</option>
+                  <option value="slow">slow</option>
+                  <option value="slower">slower</option>
+                  <option value="veryslow">veryslow</option>
+                </select>
+              </label>
+            </div>
+
+            <p className="mt-3 text-xs text-muted-foreground">
+              Slower presets improve compression but take longer to encode.
+            </p>
           </div>
         </div>
       </div>

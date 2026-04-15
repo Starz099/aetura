@@ -27,6 +27,85 @@ WORKFLOW_TOOL_NAMES = {
     "finish_task",
 }
 
+DEFAULT_RECORDING_SETTINGS = {
+    "capture_fps": 30,
+
+    # Hardcoded backend-only values (not user-configurable)
+    "capture_frame_quality": 100,
+    "capture_every_nth_frame": 1,
+    "device_scale_factor": 3,
+    "output_crf": 12,
+    "output_profile": "main",
+    "output_pix_fmt": "yuv420p",
+
+    # User-configurable values
+    "viewport_width": 1920,
+    "viewport_height": 1080,
+    "output_preset": "medium",
+}
+
+ALLOWED_CAPTURE_FPS = {15, 30, 60}
+ALLOWED_OUTPUT_PRESETS = {
+    "ultrafast",
+    "superfast",
+    "veryfast",
+    "faster",
+    "fast",
+    "medium",
+    "slow",
+    "slower",
+    "veryslow",
+}
+
+
+def _clamp_int(value: Any, default: int, minimum: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+
+    return max(minimum, min(maximum, parsed))
+
+
+def _sanitize_recording_settings(
+    recording_settings: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    if not isinstance(recording_settings, dict):
+        return dict(DEFAULT_RECORDING_SETTINGS)
+
+    settings = dict(DEFAULT_RECORDING_SETTINGS)
+
+    capture_fps = _clamp_int(
+        recording_settings.get("capture_fps"),
+        settings["capture_fps"],
+        15,
+        60,
+    )
+    settings["capture_fps"] = (
+        capture_fps
+        if capture_fps in ALLOWED_CAPTURE_FPS
+        else settings["capture_fps"]
+    )
+
+    settings["viewport_width"] = _clamp_int(
+        recording_settings.get("viewport_width"),
+        settings["viewport_width"],
+        640,
+        3840,
+    )
+    settings["viewport_height"] = _clamp_int(
+        recording_settings.get("viewport_height"),
+        settings["viewport_height"],
+        360,
+        2160,
+    )
+
+    output_preset = recording_settings.get("output_preset")
+    if output_preset in ALLOWED_OUTPUT_PRESETS:
+        settings["output_preset"] = output_preset
+
+    return settings
+
 
 class MockFunction:
     """Mock tool function for creating tool call objects."""
@@ -567,19 +646,26 @@ class ResumeWorkflow(Workflow):
 class RecordWorkflow(Workflow):
     """Workflow for recording demo videos of automation scripts."""
     
-    async def execute(self, url: str, approved_steps: List[Dict[str, Any]]) -> str:
+    async def execute(
+        self,
+        url: str,
+        approved_steps: List[Dict[str, Any]],
+        recording_settings: Optional[Dict[str, Any]] = None,
+    ) -> str:
         """
         Record a video of automation steps.
         
         Args:
             url: Starting URL
             approved_steps: Steps to record
+            recording_settings: Optional recording capture and encoding settings
             
         Returns:
             Path to recorded video file
         """
         # Note: This workflow doesn't need AI, so we don't initialize it
         os.makedirs("recordings", exist_ok=True)
+        config = _sanitize_recording_settings(recording_settings)
         frames_dir = os.path.abspath("temp_frames")
         
         if os.path.exists(frames_dir):
@@ -601,8 +687,11 @@ class RecordWorkflow(Workflow):
             )
             
             context = await browser.new_context(
-                viewport={"width": 1920, "height": 1080},
-                device_scale_factor=3
+                viewport={
+                    "width": config["viewport_width"],
+                    "height": config["viewport_height"],
+                },
+                device_scale_factor=config["device_scale_factor"],
             )
             self.page = await context.new_page()
             
@@ -632,7 +721,11 @@ class RecordWorkflow(Workflow):
             print("Starting frame capture...")
             await client.send(
                 "Page.startScreencast",
-                {"format": "jpeg", "quality": 100, "everyNthFrame": 1}
+                {
+                    "format": "jpeg",
+                    "quality": config["capture_frame_quality"],
+                    "everyNthFrame": config["capture_every_nth_frame"],
+                },
             )
             
             # Replay steps with cursor visualization
@@ -699,11 +792,14 @@ class RecordWorkflow(Workflow):
         # Stitch frames into video
         print("Encoding video...")
         ffmpeg_cmd = [
-            "ffmpeg", "-y", "-framerate", "30",
+            "ffmpeg", "-y", "-framerate", str(config["capture_fps"]),
             "-i", os.path.join(frames_dir, "frame_%05d.jpg"),
-            "-c:v", "libx264", "-pix_fmt", "yuv420p",
-            "-profile:v", "main", "-movflags", "+faststart",
-            "-crf", "12", video_path
+            "-c:v", "libx264",
+            "-profile:v", config["output_profile"], "-movflags", "+faststart",
+            "-preset", config["output_preset"],
+            "-pix_fmt", config["output_pix_fmt"],
+            "-crf", str(config["output_crf"]),
+            video_path,
         ]
         subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
