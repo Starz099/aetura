@@ -10,7 +10,7 @@ import {
   Separator,
 } from "@/components/ui";
 import { Input } from "@/components/ui/input";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { apiClient, type DemoScript, type Step } from "@/services/api";
@@ -240,9 +240,6 @@ function Home() {
         <div>
           <h1 className="text-3xl font-semibold tracking-tight">Home</h1>
         </div>
-        <Button asChild variant="outline" className="shrink-0">
-          <Link to="/recordings">Go to Recordings</Link>
-        </Button>
       </div>
 
       {!scriptData && (
