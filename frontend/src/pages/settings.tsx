@@ -4,8 +4,6 @@ import {
   useSettingsStore,
 } from "@/store/useSettingsStore";
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { CaretLeftIcon } from "@phosphor-icons/react";
 import { invoke } from "@tauri-apps/api/core";
 
 const Settings = () => {
@@ -69,11 +67,6 @@ const Settings = () => {
       <div className="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6">
         {/* Header */}
         <div className="mb-6 flex items-center gap-3">
-          <Button asChild variant="ghost" size="sm" className="h-8 w-8 p-0">
-            <Link to="/">
-              <CaretLeftIcon size={16} weight="bold" />
-            </Link>
-          </Button>
           <h1 className="text-2xl font-bold">Settings</h1>
         </div>
 

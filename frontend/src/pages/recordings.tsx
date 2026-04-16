@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import {
-  Button,
   Card,
   CardContent,
   CardDescription,
@@ -36,6 +35,16 @@ export default function Recordings() {
 
   useEffect(() => {
     fetchLibrary();
+
+    const handleRefresh = () => {
+      fetchLibrary();
+    };
+
+    window.addEventListener("aetura:refresh-recordings", handleRefresh);
+
+    return () => {
+      window.removeEventListener("aetura:refresh-recordings", handleRefresh);
+    };
   }, []);
 
   const formatDate = (timestamp: number) => {
@@ -50,18 +59,6 @@ export default function Recordings() {
           <p className="mt-1 text-muted-foreground">
             Locally stored recordings ready for editing.
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" className="sm:w-auto">
-            <Link to="/">Home</Link>
-          </Button>
-          <Button
-            onClick={fetchLibrary}
-            variant="outline"
-            className="sm:w-auto"
-          >
-            Refresh Library
-          </Button>
         </div>
       </div>
 
