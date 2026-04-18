@@ -28,7 +28,14 @@ const selectedOptionClass =
 const EditorPage = () => {
   const { address } = useParams();
   const recordingUrl = address ? decodeURIComponent(address) : null;
-  const { isExporting, message, export: handleExport } = useExport();
+  const {
+    status,
+    isExporting,
+    message,
+    progressPercent,
+    export: handleExport,
+    cancel: cancelExport,
+  } = useExport();
   const [showExportSettings, setShowExportSettings] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("mp4");
   const [selectedResolution, setSelectedResolution] =
@@ -66,7 +73,10 @@ const EditorPage = () => {
       resolution: selectedResolution,
       fps: selectedFps,
     });
-    await handleExport(exportRequest, defaultExportDirectory.trim() || null);
+
+    // Intentionally do not await here to avoid losing immediate processing UI
+    // in environments where invoke timing can resolve unexpectedly early.
+    void handleExport(exportRequest, defaultExportDirectory.trim() || null);
   };
 
   const onOpenExportSettings = () => {
@@ -77,6 +87,22 @@ const EditorPage = () => {
 
     setShowExportSettings(true);
   };
+
+  const isActivelyProcessing = isExporting;
+
+  const shouldShowProgress =
+    isActivelyProcessing ||
+    progressPercent > 0 ||
+    status === "success" ||
+    status === "cancelled";
+
+  const progressLabel = isActivelyProcessing
+    ? "Export progress"
+    : status === "success"
+      ? "Export complete"
+      : status === "cancelled"
+        ? "Export cancelled"
+        : "Export progress";
 
   useEffect(() => {
     const previousTitle = document.title;
@@ -155,6 +181,7 @@ const EditorPage = () => {
                       selectedFormat === "mp4" ? selectedOptionClass : ""
                     }`}
                     onClick={() => setSelectedFormat("mp4")}
+                    disabled={isActivelyProcessing}
                   >
                     MP4
                   </Button>
@@ -164,6 +191,7 @@ const EditorPage = () => {
                       selectedFormat === "gif" ? selectedOptionClass : ""
                     }`}
                     onClick={() => setSelectedFormat("gif")}
+                    disabled={isActivelyProcessing}
                   >
                     GIF
                   </Button>
@@ -179,6 +207,7 @@ const EditorPage = () => {
                       selectedResolution === "720p" ? selectedOptionClass : ""
                     }`}
                     onClick={() => setSelectedResolution("720p")}
+                    disabled={isActivelyProcessing}
                   >
                     720p
                   </Button>
@@ -188,6 +217,7 @@ const EditorPage = () => {
                       selectedResolution === "1080p" ? selectedOptionClass : ""
                     }`}
                     onClick={() => setSelectedResolution("1080p")}
+                    disabled={isActivelyProcessing}
                   >
                     1080p
                   </Button>
@@ -197,6 +227,7 @@ const EditorPage = () => {
                       selectedResolution === "4k" ? selectedOptionClass : ""
                     }`}
                     onClick={() => setSelectedResolution("4k")}
+                    disabled={isActivelyProcessing}
                   >
                     4K
                   </Button>
@@ -210,6 +241,7 @@ const EditorPage = () => {
                     variant="outline"
                     className={`h-11 ${selectedFps === 15 ? selectedOptionClass : ""}`}
                     onClick={() => setSelectedFps(15)}
+                    disabled={isActivelyProcessing}
                   >
                     15
                   </Button>
@@ -217,6 +249,7 @@ const EditorPage = () => {
                     variant="outline"
                     className={`h-11 ${selectedFps === 30 ? selectedOptionClass : ""}`}
                     onClick={() => setSelectedFps(30)}
+                    disabled={isActivelyProcessing}
                   >
                     30
                   </Button>
@@ -224,6 +257,7 @@ const EditorPage = () => {
                     variant="outline"
                     className={`h-11 ${selectedFps === 60 ? selectedOptionClass : ""}`}
                     onClick={() => setSelectedFps(60)}
+                    disabled={isActivelyProcessing}
                   >
                     60
                   </Button>
@@ -233,24 +267,59 @@ const EditorPage = () => {
               <div className="rounded-md border border-border bg-muted/25 p-3 text-xs text-muted-foreground">
                 {message
                   ? message
-                  : `Selected: FILE • ${selectedFormat.toUpperCase()} • ${selectedResolution.toUpperCase()} • ${selectedFps} FPS.`}
+                  : isActivelyProcessing
+                    ? "Rendering export..."
+                    : `Selected: FILE • ${selectedFormat.toUpperCase()} • ${selectedResolution.toUpperCase()} • ${selectedFps} FPS.`}
               </div>
             </CardContent>
 
             <div className="space-y-2 border-t p-3">
+              {shouldShowProgress ? (
+                <section className="space-y-2 pb-1">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{progressLabel}</span>
+                    <span>{Math.round(progressPercent)}%</span>
+                  </div>
+                  <div
+                    className="h-2 w-full overflow-hidden rounded-full border border-border/60 bg-muted/40"
+                    role="progressbar"
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={Math.round(progressPercent)}
+                    aria-label="Export progress"
+                  >
+                    <div
+                      className="h-full bg-primary transition-[width] duration-150 ease-linear"
+                      style={{
+                        width: `${Math.max(0, Math.min(100, progressPercent))}%`,
+                      }}
+                    />
+                  </div>
+                </section>
+              ) : null}
+
               <Button
                 className="w-full"
                 size="lg"
                 onClick={onExport}
-                disabled={isExporting}
+                disabled={isActivelyProcessing}
               >
-                {isExporting ? "Exporting..." : "Export to File"}
+                {isActivelyProcessing ? "Exporting..." : "Export to File"}
               </Button>
+              {isActivelyProcessing ? (
+                <Button
+                  variant="destructive"
+                  className="w-full"
+                  onClick={cancelExport}
+                >
+                  Cancel Export
+                </Button>
+              ) : null}
               <Button
                 variant="ghost"
                 className="w-full"
                 onClick={() => setShowExportSettings(false)}
-                disabled={isExporting}
+                disabled={isActivelyProcessing}
               >
                 Back to Editor
               </Button>

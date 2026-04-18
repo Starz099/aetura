@@ -5,11 +5,31 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ExportRequest as EditorExportRequest } from "@/store/useEditorStore";
 
-export type ExportStatus = "idle" | "running" | "success" | "error";
+export type ExportStatus =
+  | "idle"
+  | "running"
+  | "success"
+  | "error"
+  | "cancelled";
+
+export type ExportEventKind =
+  | "started"
+  | "progress"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+export interface ExportStatusEvent {
+  kind: ExportEventKind;
+  progressPercent?: number;
+  message?: string;
+  outputPath?: string;
+}
 
 export interface ExportResult {
   status: ExportStatus;
   message: string;
+  progressPercent?: number;
   outputPath?: string;
 }
 
@@ -48,6 +68,7 @@ export class ExportService {
       return {
         status: "success",
         message: `Export completed: ${result.outputPath}`,
+        progressPercent: 100,
         outputPath: result.outputPath,
       };
     } catch (error) {
@@ -59,6 +80,10 @@ export class ExportService {
         message,
       };
     }
+  }
+
+  async cancel(): Promise<void> {
+    await invoke("cancel_export");
   }
 
   private validateRequest(request: ExportRequest): void {

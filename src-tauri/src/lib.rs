@@ -6,8 +6,35 @@ mod filters;
 mod models;
 mod validation;
 
-use models::{ExportRequest, ExportResult};
+use models::{ExportRequest, ExportResult, ExportStatusEvent};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use tauri::Emitter;
+
+const EXPORT_STATUS_EVENT: &str = "export-status";
+
+fn emit_export_status(app: &tauri::AppHandle, payload: ExportStatusEvent) {
+    let _ = app.emit(EXPORT_STATUS_EVENT, &payload);
+}
+
+#[derive(Default)]
+struct ExportRuntimeState {
+    inner: Mutex<ExportRuntimeInner>,
+}
+
+struct ExportRuntimeInner {
+    is_running: bool,
+    cancel_requested: Arc<AtomicBool>,
+}
+
+impl Default for ExportRuntimeInner {
+    fn default() -> Self {
+        Self {
+            is_running: false,
+            cancel_requested: Arc::new(AtomicBool::new(false)),
+        }
+    }
+}
 
 fn resolution_tag(resolution: &models::ExportResolution) -> &'static str {
     match resolution {
@@ -26,13 +53,18 @@ fn resolution_tag(resolution: &models::ExportResolution) -> &'static str {
 /// 4. Executes FFmpeg encoding
 /// 5. Returns the output path
 #[tauri::command]
-fn start_export(
+async fn start_export(
     app: tauri::AppHandle,
+    runtime_state: tauri::State<'_, ExportRuntimeState>,
     request: ExportRequest,
     default_output_directory: Option<String>,
 ) -> Result<ExportResult, String> {
     // Validate request
-    validation::validate_request(&request).map_err(|e| e.message())?;
+    if let Err(error) = validation::validate_request(&request) {
+        let message = error.message();
+        emit_export_status(&app, ExportStatusEvent::failed(message.clone()));
+        return Err(message);
+    }
 
     // Get output path from user
     let format_extension = match request.format {
@@ -57,7 +89,11 @@ fn start_export(
         format_extension,
         default_directory.as_deref(),
     )
-        .map_err(|e| e.message())?;
+        .map_err(|e| {
+            let message = e.message();
+            emit_export_status(&app, ExportStatusEvent::failed(message.clone()));
+            message
+        })?;
 
     // Enforce extension to match selected format even if the dialog returns a stale extension.
     output_path.set_extension(format_extension);
@@ -67,9 +103,56 @@ fn start_export(
     let zoom_expression = filters::build_zoom_expression(request.effects.clone());
     let filter_graph = filters::build_filter_graph(&zoom_expression);
 
+    let cancel_signal = {
+        let mut runtime = runtime_state
+            .inner
+            .lock()
+            .map_err(|_| "Internal error: export runtime lock poisoned".to_string())?;
+
+        if runtime.is_running {
+            let message = "Export already running".to_string();
+            emit_export_status(&app, ExportStatusEvent::failed(message.clone()));
+            return Err(message);
+        }
+
+        runtime.is_running = true;
+        runtime.cancel_requested.store(false, Ordering::SeqCst);
+        runtime.cancel_requested.clone()
+    };
+
+    emit_export_status(&app, ExportStatusEvent::started());
+
     // Execute FFmpeg
-    ffmpeg::execute_ffmpeg(&request, &filter_graph, &output_path_string)
-        .map_err(|e| e.message())?;
+    let progress_app = app.clone();
+    let ffmpeg_result = ffmpeg::execute_ffmpeg(
+        &request,
+        &filter_graph,
+        &output_path_string,
+        move |percent| {
+            emit_export_status(&progress_app, ExportStatusEvent::progress(percent));
+        },
+        move || cancel_signal.load(Ordering::SeqCst),
+    )
+        .map_err(|e| e.message());
+
+    if let Ok(mut runtime) = runtime_state.inner.lock() {
+        runtime.is_running = false;
+        runtime.cancel_requested.store(false, Ordering::SeqCst);
+    }
+
+    if let Err(message) = ffmpeg_result {
+        if message.starts_with("Export cancelled:") {
+            emit_export_status(&app, ExportStatusEvent::cancelled(message.clone()));
+        } else {
+            emit_export_status(&app, ExportStatusEvent::failed(message.clone()));
+        }
+        return Err(message);
+    }
+
+    emit_export_status(
+        &app,
+        ExportStatusEvent::completed(output_path_string.clone()),
+    );
 
     // Emit success event
     let _ = app.emit("export-finished", &ExportResult {
@@ -79,6 +162,22 @@ fn start_export(
     Ok(ExportResult {
         output_path: output_path_string,
     })
+}
+
+/// Cancel an active export process.
+#[tauri::command]
+fn cancel_export(runtime_state: tauri::State<ExportRuntimeState>) -> Result<(), String> {
+    let runtime = runtime_state
+        .inner
+        .lock()
+        .map_err(|_| "Internal error: export runtime lock poisoned".to_string())?;
+
+    if !runtime.is_running {
+        return Err("No export is currently running".to_string());
+    }
+
+    runtime.cancel_requested.store(true, Ordering::SeqCst);
+    Ok(())
 }
 
 /// Select a directory for export
@@ -97,6 +196,7 @@ fn open_directory_in_explorer(directory: String) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(ExportRuntimeState::default())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -109,6 +209,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             start_export,
+            cancel_export,
             select_directory,
             open_directory_in_explorer
         ])

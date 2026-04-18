@@ -11,6 +11,8 @@ pub enum AppError {
     IoError(String),
     /// Invalid request
     InvalidRequest(String),
+    /// Export cancelled by user
+    Cancelled(String),
 }
 
 impl AppError {
@@ -22,6 +24,7 @@ impl AppError {
             AppError::FFmpegError(msg) => format!("FFmpeg error: {}", msg),
             AppError::IoError(msg) => format!("IO error: {}", msg),
             AppError::InvalidRequest(msg) => format!("Invalid request: {}", msg),
+            AppError::Cancelled(msg) => format!("Export cancelled: {}", msg),
         }
     }
 }
