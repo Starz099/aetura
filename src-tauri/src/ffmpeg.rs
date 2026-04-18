@@ -1,9 +1,11 @@
 /// FFmpeg binary management and execution
 use crate::errors::AppError;
 use crate::models::{ExportFormat, ExportRequest, ExportResolution};
+use std::collections::VecDeque;
 use std::env;
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 fn build_ffmpeg_args(request: &ExportRequest, filter_graph: &str, output: &str) -> Vec<String> {
     let resolution_filter = match request.resolution {
@@ -26,6 +28,9 @@ fn build_ffmpeg_args(request: &ExportRequest, filter_graph: &str, output: &str) 
 
     let mut args = vec![
         "-hide_banner".to_string(),
+        "-nostats".to_string(),
+        "-progress".to_string(),
+        "pipe:2".to_string(),
         "-y".to_string(),
         "-i".to_string(),
         request.source.clone(),
@@ -67,6 +72,36 @@ fn build_ffmpeg_args(request: &ExportRequest, filter_graph: &str, output: &str) 
     args
 }
 
+fn hms_to_seconds(raw: &str) -> Option<f64> {
+    let mut parts = raw.split(':');
+    let hours: f64 = parts.next()?.parse().ok()?;
+    let minutes: f64 = parts.next()?.parse().ok()?;
+    let seconds: f64 = parts.next()?.parse().ok()?;
+
+    if parts.next().is_some() {
+        return None;
+    }
+
+    Some((hours * 3600.0) + (minutes * 60.0) + seconds)
+}
+
+fn parse_ffmpeg_time_seconds(line: &str) -> Option<f64> {
+    if let Some(raw_value) = line.strip_prefix("out_time_ms=") {
+        let micros: f64 = raw_value.parse().ok()?;
+        return Some(micros / 1_000_000.0);
+    }
+
+    if let Some(raw_value) = line.strip_prefix("out_time=") {
+        return hms_to_seconds(raw_value);
+    }
+
+    let token = line
+        .split_whitespace()
+        .find(|part| part.starts_with("time="))?;
+    let value = token.strip_prefix("time=")?;
+    hms_to_seconds(value)
+}
+
 /// Resolve the FFmpeg binary path
 ///
 /// Searches for ffmpeg in this order:
@@ -102,32 +137,75 @@ pub fn execute_ffmpeg(
     request: &ExportRequest,
     filter_graph: &str,
     output: &str,
+    mut on_progress: impl FnMut(f64),
+    should_cancel: impl Fn() -> bool,
 ) -> Result<(), AppError> {
     let ffmpeg = resolve_ffmpeg_binary();
     let args = build_ffmpeg_args(request, filter_graph, output);
 
     let mut command = Command::new(&ffmpeg);
     command.args(&args);
+    command.stdout(Stdio::null());
+    command.stderr(Stdio::piped());
 
-    let ffmpeg_output = command
-        .output()
-        .map_err(|error| {
-            AppError::FFmpegError(format!(
-                "Could not launch ffmpeg ({}) at {}",
-                error,
-                ffmpeg.to_string_lossy()
-            ))
+    let mut child = command.spawn().map_err(|error| {
+        AppError::FFmpegError(format!(
+            "Could not launch ffmpeg ({}) at {}",
+            error,
+            ffmpeg.to_string_lossy()
+        ))
+    })?;
+
+    let stderr = child.stderr.take().ok_or_else(|| {
+        AppError::FFmpegError("Could not capture ffmpeg stderr stream".to_string())
+    })?;
+    let mut last_stderr_lines: VecDeque<String> = VecDeque::with_capacity(12);
+    let mut last_emitted_percent: i32 = -1;
+
+    for line_result in BufReader::new(stderr).lines() {
+        if should_cancel() {
+            child
+                .kill()
+                .map_err(|error| AppError::Cancelled(format!("Could not stop ffmpeg: {}", error)))?;
+            let _ = child.wait();
+            return Err(AppError::Cancelled("Encoding interrupted by user".to_string()));
+        }
+
+        let line = line_result.map_err(|error| {
+            AppError::FFmpegError(format!("Could not read ffmpeg output: {}", error))
         })?;
 
-    if !ffmpeg_output.status.success() {
-        let stderr = String::from_utf8_lossy(&ffmpeg_output.stderr);
-        let tail = stderr
-            .lines()
-            .rev()
-            .take(12)
-            .collect::<Vec<_>>()
+        if last_stderr_lines.len() == 12 {
+            last_stderr_lines.pop_front();
+        }
+        last_stderr_lines.push_back(line.clone());
+
+        if request.duration > 0.0 {
+            if let Some(encoded_seconds) = parse_ffmpeg_time_seconds(&line) {
+                let percent = ((encoded_seconds / request.duration as f64) * 100.0).clamp(0.0, 100.0);
+                let whole_percent = percent.floor() as i32;
+
+                if whole_percent > last_emitted_percent {
+                    last_emitted_percent = whole_percent;
+                    on_progress(percent);
+                }
+            }
+        }
+    }
+
+    if should_cancel() {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(AppError::Cancelled("Encoding interrupted by user".to_string()));
+    }
+
+    let status = child.wait().map_err(|error| {
+        AppError::FFmpegError(format!("Could not wait for ffmpeg process: {}", error))
+    })?;
+
+    if !status.success() {
+        let tail = last_stderr_lines
             .into_iter()
-            .rev()
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -175,6 +253,51 @@ mod tests {
         let mut request = sample_request(ExportFormat::Mp4);
         request.fps = fps;
         request
+    }
+
+    #[test]
+    fn test_hms_to_seconds_parses_fractional_seconds() {
+        let seconds = hms_to_seconds("00:00:01.50").expect("expected valid timestamp");
+        assert!((seconds - 1.5).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_hms_to_seconds_rejects_invalid_timestamp() {
+        assert!(hms_to_seconds("bad-timestamp").is_none());
+        assert!(hms_to_seconds("00:00").is_none());
+        assert!(hms_to_seconds("00:00:01:00").is_none());
+    }
+
+    #[test]
+    fn test_parse_ffmpeg_time_seconds_from_progress_line() {
+        let line =
+            "frame=  110 fps= 29 q=23.0 size=1024kB time=00:00:03.67 bitrate=2287.3kbits/s";
+        let seconds = parse_ffmpeg_time_seconds(line).expect("expected parsed time");
+        assert!((seconds - 3.67).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_parse_ffmpeg_time_seconds_missing_time_returns_none() {
+        let line = "frame=110 fps=29 bitrate=2287.3kbits/s";
+        assert!(parse_ffmpeg_time_seconds(line).is_none());
+    }
+
+    #[test]
+    fn test_parse_ffmpeg_time_seconds_with_invalid_time_returns_none() {
+        let line = "frame=110 fps=29 time=N/A bitrate=2287.3kbits/s";
+        assert!(parse_ffmpeg_time_seconds(line).is_none());
+    }
+
+    #[test]
+    fn test_parse_ffmpeg_time_seconds_from_out_time_ms_line() {
+        let seconds = parse_ffmpeg_time_seconds("out_time_ms=1250000").expect("expected parsed out_time_ms");
+        assert!((seconds - 1.25).abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_parse_ffmpeg_time_seconds_from_out_time_line() {
+        let seconds = parse_ffmpeg_time_seconds("out_time=00:00:04.20").expect("expected parsed out_time");
+        assert!((seconds - 4.2).abs() < 0.0001);
     }
 
     #[test]

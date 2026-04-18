@@ -94,6 +94,66 @@ pub struct ExportResult {
     pub output_path: String,
 }
 
+/// Export lifecycle event payload emitted to the frontend.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportStatusEvent {
+    pub kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub progress_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_path: Option<String>,
+}
+
+impl ExportStatusEvent {
+    pub fn started() -> Self {
+        Self {
+            kind: "started".to_string(),
+            progress_percent: Some(0.0),
+            message: Some("Preparing export...".to_string()),
+            output_path: None,
+        }
+    }
+
+    pub fn progress(progress_percent: f64) -> Self {
+        Self {
+            kind: "progress".to_string(),
+            progress_percent: Some(progress_percent),
+            message: None,
+            output_path: None,
+        }
+    }
+
+    pub fn completed(output_path: String) -> Self {
+        Self {
+            kind: "completed".to_string(),
+            progress_percent: Some(100.0),
+            message: Some("Export completed".to_string()),
+            output_path: Some(output_path),
+        }
+    }
+
+    pub fn failed(message: String) -> Self {
+        Self {
+            kind: "failed".to_string(),
+            progress_percent: None,
+            message: Some(message),
+            output_path: None,
+        }
+    }
+
+    pub fn cancelled(message: String) -> Self {
+        Self {
+            kind: "cancelled".to_string(),
+            progress_percent: None,
+            message: Some(message),
+            output_path: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
