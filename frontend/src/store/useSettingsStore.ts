@@ -16,6 +16,7 @@ export interface RecordingSettings {
   captureFps: 15 | 30 | 60;
   viewportWidth: number;
   viewportHeight: number;
+  recordAudio: boolean;
   outputPreset: RecordingPreset;
 }
 
@@ -23,6 +24,7 @@ export const defaultRecordingSettings: RecordingSettings = {
   captureFps: 30,
   viewportWidth: 1920,
   viewportHeight: 1080,
+  recordAudio: false,
   outputPreset: "medium",
 };
 

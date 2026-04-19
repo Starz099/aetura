@@ -39,6 +39,7 @@ class RecordingSettingsRequest(BaseModel):
     capture_fps: Optional[Literal[15, 30, 60]] = None
     viewport_width: Optional[int] = Field(default=None, ge=640, le=3840)
     viewport_height: Optional[int] = Field(default=None, ge=360, le=2160)
+    record_audio: Optional[bool] = None
     output_preset: Optional[
         Literal[
             "ultrafast",

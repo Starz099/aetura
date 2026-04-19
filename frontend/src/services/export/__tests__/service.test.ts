@@ -20,6 +20,10 @@ describe("exportService", () => {
       source: "/tmp/input.mp4",
       duration: 12,
       effects: [],
+      format: "mp4",
+      resolution: "1080p",
+      fps: 30,
+      optimizeFileSize: false,
       outputDirectory: "/tmp",
     });
 
@@ -28,12 +32,17 @@ describe("exportService", () => {
         source: "/tmp/input.mp4",
         duration: 12,
         effects: [],
+        format: "mp4",
+        resolution: "1080p",
+        fps: 30,
+        optimizeFileSize: false,
       },
       defaultOutputDirectory: "/tmp",
     });
     expect(result).toEqual({
       status: "success",
       message: "Export completed: /tmp/output.mp4",
+      progressPercent: 100,
       outputPath: "/tmp/output.mp4",
     });
   });
@@ -44,6 +53,10 @@ describe("exportService", () => {
         source: "",
         duration: 12,
         effects: [],
+        format: "mp4",
+        resolution: "1080p",
+        fps: 30,
+        optimizeFileSize: false,
       }),
     ).rejects.toThrow("Source is required");
 
@@ -57,6 +70,10 @@ describe("exportService", () => {
       source: "/tmp/input.mp4",
       duration: 12,
       effects: [],
+      format: "mp4",
+      resolution: "1080p",
+      fps: 30,
+      optimizeFileSize: false,
     });
 
     expect(result).toEqual({

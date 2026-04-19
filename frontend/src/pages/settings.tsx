@@ -166,6 +166,24 @@ const Settings = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <label className="space-y-1 text-sm sm:col-span-2">
+                <span className="text-muted-foreground">Record Audio</span>
+                <div className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3">
+                  <input
+                    type="checkbox"
+                    checked={recordingSettings.recordAudio}
+                    onChange={(event) =>
+                      updateRecordingSettings({
+                        recordAudio: event.target.checked,
+                      })
+                    }
+                  />
+                  <span className="text-sm">
+                    Include audio track in recordings
+                  </span>
+                </div>
+              </label>
+
               <label className="space-y-1 text-sm">
                 <span className="text-muted-foreground">Capture FPS</span>
                 <select

@@ -64,6 +64,7 @@ export interface RecordingSettingsRequest {
   capture_fps?: 15 | 30 | 60;
   viewport_width?: number;
   viewport_height?: number;
+  record_audio?: boolean;
   output_preset?: RecordingPreset;
 }
 

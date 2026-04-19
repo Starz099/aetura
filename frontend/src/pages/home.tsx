@@ -110,6 +110,7 @@ function Home() {
           capture_fps: recordingSettings.captureFps,
           viewport_width: recordingSettings.viewportWidth,
           viewport_height: recordingSettings.viewportHeight,
+          record_audio: recordingSettings.recordAudio,
           output_preset: recordingSettings.outputPreset,
         },
       });

@@ -147,6 +147,9 @@ class TestRecordingSettingsSanitization:
         assert settings["capture_fps"] == 30
         assert settings["viewport_width"] == 1920
         assert settings["viewport_height"] == 1080
+        assert settings["record_audio"] is False
+        assert settings["audio_device"] == "default"
+        assert settings["audio_bitrate_kbps"] == 192
         assert settings["output_preset"] == "medium"
         assert settings["output_crf"] == 12
         assert settings["device_scale_factor"] == 3
@@ -158,6 +161,7 @@ class TestRecordingSettingsSanitization:
                 "capture_fps": 120,
                 "viewport_width": 5000,
                 "viewport_height": 100,
+                "record_audio": True,
                 "output_preset": "invalid",
             }
         )
@@ -165,6 +169,9 @@ class TestRecordingSettingsSanitization:
         assert settings["capture_fps"] == 30
         assert settings["viewport_width"] == 3840
         assert settings["viewport_height"] == 360
+        assert settings["record_audio"] is True
+        assert settings["audio_device"] == "default"
+        assert settings["audio_bitrate_kbps"] == 192
         assert settings["output_preset"] == "medium"
         assert settings["capture_frame_quality"] == 100
         assert settings["capture_every_nth_frame"] == 1
