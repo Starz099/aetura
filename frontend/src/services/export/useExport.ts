@@ -136,6 +136,7 @@ export function useExport() {
           source: request.source,
           duration: request.duration,
           effects: request.effects,
+          background: request.background,
           format: request.format,
           resolution: request.resolution,
           fps: request.fps,

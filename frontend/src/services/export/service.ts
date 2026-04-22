@@ -37,6 +37,7 @@ export interface ExportRequest {
   source: string;
   duration: number;
   effects: EditorExportRequest["effects"];
+  background: EditorExportRequest["background"];
   format: EditorExportRequest["format"];
   resolution: EditorExportRequest["resolution"];
   fps: EditorExportRequest["fps"];
@@ -57,6 +58,7 @@ export class ExportService {
           source: request.source,
           duration: request.duration,
           effects: request.effects,
+          background: request.background,
           format: request.format,
           resolution: request.resolution,
           fps: request.fps,

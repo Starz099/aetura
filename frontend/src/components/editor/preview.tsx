@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button, Card, CardContent } from "@/components/ui";
 import { useEditorStore } from "@/store/useEditorStore";
+import { getBackgroundPreset } from "@/components/editor/tools/background/presets";
 
 interface EditorPreviewProps {
   previewUrl: string | null;
@@ -32,7 +33,18 @@ export function EditorPreview({
   const setCurrentTime = useEditorStore((state) => state.setCurrentTime);
   const setDuration = useEditorStore((state) => state.setDuration);
   const setIsPlaying = useEditorStore((state) => state.setIsPlaying);
+  const backgroundSettings = useEditorStore(
+    (state) => state.backgroundSettings,
+  );
   const zoomScale = activeZoomEffect?.multiplier ?? 1;
+  const backgroundPreset = getBackgroundPreset(backgroundSettings.presetId);
+  const previewPadding = backgroundSettings.enabled
+    ? Math.min(Math.max(backgroundSettings.padding, 0), 64)
+    : 0;
+  const backgroundImageUrl =
+    backgroundSettings.enabled && backgroundPreset
+      ? `url(${backgroundPreset.imageUrl})`
+      : undefined;
 
   useEffect(() => {
     if (autoPlay || thumbnailMode) {
@@ -112,8 +124,8 @@ export function EditorPreview({
 
   return (
     <Card className="min-h-0 flex-1">
-      <CardContent className="flex h-full min-h-0">
-        <div className="relative flex h-full min-h-90 w-full items-center justify-center overflow-hidden rounded-md border-2 border-border/80 bg-muted/45 shadow-[0_3px_0_var(--shadow-soft)]">
+      <CardContent className="flex h-full min-h-0 items-center justify-center p-2">
+        <div className="relative h-full w-full overflow-hidden rounded-md border-2 border-border/80 bg-muted/45 shadow-[0_3px_0_var(--shadow-soft)]">
           {previewUrl ? (
             <>
               {activeZoomEffect ? (
@@ -122,28 +134,47 @@ export function EditorPreview({
                 </div>
               ) : null}
               <div
-                className="origin-center transition-transform duration-150 ease-out"
-                style={{ transform: `scale(${zoomScale})` }}
+                className="absolute inset-0"
+                style={{
+                  backgroundImage: backgroundImageUrl,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
               >
-                <video
-                  ref={videoRef}
-                  src={previewUrl}
-                  autoPlay={autoPlay}
-                  playsInline
-                  muted={isMuted}
-                  className="h-full w-full rounded-md bg-black object-contain"
-                  onLoadedMetadata={(event) => {
-                    setDuration(event.currentTarget.duration);
-                    if (thumbnailMode) {
-                      event.currentTarget.currentTime = 0;
-                    }
+                <div
+                  className="absolute inset-0"
+                  style={{
+                    top: `${previewPadding}px`,
+                    right: `${previewPadding}px`,
+                    bottom: `${previewPadding}px`,
+                    left: `${previewPadding}px`,
                   }}
-                  onTimeUpdate={(event) => {
-                    setCurrentTime(event.currentTarget.currentTime);
-                  }}
-                  onPlay={() => setIsPlaying(true)}
-                  onPause={() => setIsPlaying(false)}
-                />
+                >
+                  <div
+                    className="flex h-full w-full items-center justify-center origin-center transition-transform duration-150 ease-out"
+                    style={{ transform: `scale(${zoomScale})` }}
+                  >
+                    <video
+                      ref={videoRef}
+                      src={previewUrl}
+                      autoPlay={autoPlay}
+                      playsInline
+                      muted={isMuted}
+                      className="h-full w-full rounded-md bg-transparent object-cover object-center"
+                      onLoadedMetadata={(event) => {
+                        setDuration(event.currentTarget.duration);
+                        if (thumbnailMode) {
+                          event.currentTarget.currentTime = 0;
+                        }
+                      }}
+                      onTimeUpdate={(event) => {
+                        setCurrentTime(event.currentTarget.currentTime);
+                      }}
+                      onPlay={() => setIsPlaying(true)}
+                      onPause={() => setIsPlaying(false)}
+                    />
+                  </div>
+                </div>
               </div>
               {showMuteToggle && !thumbnailMode ? (
                 <Button

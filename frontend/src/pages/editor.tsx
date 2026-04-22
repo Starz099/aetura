@@ -9,7 +9,7 @@ import {
 } from "@/components/ui";
 import { Button } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import {
   buildExportRequest,
   type ExportFormat,
@@ -19,15 +19,32 @@ import {
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { EditorPreview } from "@/components/editor/preview";
 import { EditorTimeline } from "@/components/editor/timeline";
+import { BackgroundToolPanel } from "@/components/editor/tools";
 import { useExport } from "@/services/export";
 
-const effectTools = ["Zoom"];
+const effectTools = ["Zoom", "Background"];
 const selectedOptionClass =
   "!border-primary/60 !bg-primary/10 !text-primary shadow-[0_2px_0_var(--shadow-soft)]";
 
 const EditorPage = () => {
   const { address } = useParams();
-  const recordingUrl = address ? decodeURIComponent(address) : null;
+  const [searchParams] = useSearchParams();
+  const recordingSrc = searchParams.get("src");
+  const recordingUrl = useMemo(() => {
+    if (recordingSrc) {
+      return recordingSrc;
+    }
+
+    if (!address) {
+      return null;
+    }
+
+    try {
+      return decodeURIComponent(address);
+    } catch {
+      return address;
+    }
+  }, [address, recordingSrc]);
   const {
     status,
     isExporting,
@@ -37,30 +54,39 @@ const EditorPage = () => {
     cancel: cancelExport,
   } = useExport();
   const [showExportSettings, setShowExportSettings] = useState(false);
+  const [showBackgroundSettings, setShowBackgroundSettings] = useState(false);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("mp4");
   const [selectedResolution, setSelectedResolution] =
     useState<ExportResolution>("1080p");
   const [selectedFps, setSelectedFps] = useState<15 | 30 | 60>(60);
   const resetTimeline = useEditorStore((state) => state.resetTimeline);
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
+  const selectEffect = useEditorStore((state) => state.selectEffect);
   const effects = useEditorStore((state) => state.effects);
+  const backgroundSettings = useEditorStore(
+    (state) => state.backgroundSettings,
+  );
   const duration = useEditorStore((state) => state.duration);
   const defaultExportDirectory = useSettingsStore(
     (state) => state.defaultExportDirectory,
   );
 
-  const previewUrl = useMemo(
-    () =>
-      recordingUrl
-        ? recordingUrl.startsWith("http://") ||
-          recordingUrl.startsWith("https://")
-          ? recordingUrl
-          : `http://localhost:8000/recordings/${encodeURIComponent(
-              recordingUrl.split(/[\\/]/).pop() || "",
-            )}`
-        : null,
-    [recordingUrl],
-  );
+  const previewUrl = useMemo(() => {
+    if (!recordingUrl) {
+      return null;
+    }
+
+    if (
+      recordingUrl.startsWith("http://") ||
+      recordingUrl.startsWith("https://")
+    ) {
+      return recordingUrl;
+    }
+
+    return `http://localhost:8000/recordings/${encodeURIComponent(
+      recordingUrl.split(/[\\/]/).pop() || "",
+    )}`;
+  }, [recordingUrl]);
 
   const onExport = async () => {
     if (!previewUrl) {
@@ -68,11 +94,17 @@ const EditorPage = () => {
       return;
     }
 
-    const exportRequest = buildExportRequest(previewUrl, duration, effects, {
-      format: selectedFormat,
-      resolution: selectedResolution,
-      fps: selectedFps,
-    });
+    const exportRequest = buildExportRequest(
+      previewUrl,
+      duration,
+      effects,
+      backgroundSettings,
+      {
+        format: selectedFormat,
+        resolution: selectedResolution,
+        fps: selectedFps,
+      },
+    );
 
     // Intentionally do not await here to avoid losing immediate processing UI
     // in environments where invoke timing can resolve unexpectedly early.
@@ -118,7 +150,7 @@ const EditorPage = () => {
   }, [previewUrl, resetTimeline]);
 
   useEffect(() => {
-    if (!showExportSettings) {
+    if (!showExportSettings && !showBackgroundSettings) {
       return;
     }
 
@@ -128,7 +160,7 @@ const EditorPage = () => {
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [showExportSettings]);
+  }, [showExportSettings, showBackgroundSettings]);
 
   if (showExportSettings) {
     return (
@@ -436,9 +468,13 @@ const EditorPage = () => {
                   onClick={() => {
                     if (tool === "Zoom") {
                       addZoomEffect();
+                      return;
+                    }
+
+                    if (tool === "Background") {
+                      setShowBackgroundSettings(true);
                     }
                   }}
-                  disabled={tool !== "Zoom"}
                 >
                   {tool}
                 </Button>
@@ -447,6 +483,25 @@ const EditorPage = () => {
           </aside>
         </div>
       </CardContent>
+
+      {showBackgroundSettings ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl">
+            <BackgroundToolPanel />
+            <Button
+              type="button"
+              variant="ghost"
+              className="mt-2 w-full"
+              onClick={() => {
+                setShowBackgroundSettings(false);
+                selectEffect(null);
+              }}
+            >
+              Close
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 };
