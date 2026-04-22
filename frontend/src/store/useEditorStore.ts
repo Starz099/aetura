@@ -17,6 +17,12 @@ export interface ExportEffect {
   multiplier: number;
 }
 
+export interface EditorBackgroundSettings {
+  enabled: boolean;
+  presetId: string;
+  padding: number;
+}
+
 export type ExportDestination = "file";
 export type ExportFormat = "mp4" | "gif";
 export type ExportResolution = "720p" | "1080p" | "4k";
@@ -34,6 +40,7 @@ export interface ExportRequest {
   source: string;
   duration: number;
   effects: ExportEffect[];
+  background: EditorBackgroundSettings;
   destination: ExportDestination;
   format: ExportFormat;
   resolution: ExportResolution;
@@ -51,6 +58,15 @@ const defaultExportSettings: ExportSettings = {
 
 const DEFAULT_ZOOM_LENGTH = 3;
 const DEFAULT_ZOOM_MULTIPLIER = 1.25;
+const DEFAULT_BACKGROUND_PRESET_ID = "aurora-1";
+const DEFAULT_BACKGROUND_PADDING = 32;
+const MAX_BACKGROUND_PADDING = 64;
+
+const defaultBackgroundSettings: EditorBackgroundSettings = {
+  enabled: false,
+  presetId: DEFAULT_BACKGROUND_PRESET_ID,
+  padding: DEFAULT_BACKGROUND_PADDING,
+};
 
 const createEffectId = () =>
   typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -63,6 +79,7 @@ interface EditorState {
   duration: number;
   effects: EditorEffect[];
   selectedEffectId: string | null;
+  backgroundSettings: EditorBackgroundSettings;
 
   setIsPlaying: (isPlaying: boolean) => void;
   setCurrentTime: (time: number) => void;
@@ -78,6 +95,10 @@ interface EditorState {
   ) => void;
   removeEffect: (effectId: string) => void;
   selectEffect: (effectId: string | null) => void;
+  updateBackgroundSettings: (
+    updates: Partial<EditorBackgroundSettings>,
+  ) => void;
+  resetBackgroundSettings: () => void;
 }
 
 const clampTime = (time: number, duration: number) => {
@@ -89,6 +110,22 @@ const clampTime = (time: number, duration: number) => {
 
   return Math.min(Math.max(time, 0), safeDuration);
 };
+
+const clampPaddingValue = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(Math.max(value, 0), MAX_BACKGROUND_PADDING);
+};
+
+const normalizeBackgroundSettings = (
+  settings: EditorBackgroundSettings,
+): EditorBackgroundSettings => ({
+  enabled: Boolean(settings.enabled),
+  presetId: settings.presetId.trim() || DEFAULT_BACKGROUND_PRESET_ID,
+  padding: clampPaddingValue(settings.padding),
+});
 
 const clampEffect = (effect: EditorEffect, duration: number): EditorEffect => {
   const safeDuration = Number.isFinite(duration) ? Math.max(duration, 0) : 0;
@@ -146,6 +183,7 @@ export const buildExportRequest = (
   source: string,
   duration: number,
   effects: EditorEffect[],
+  background: EditorBackgroundSettings,
   settings?: Partial<ExportSettings>,
 ): ExportRequest => {
   const safeDuration = Number.isFinite(duration) ? Math.max(duration, 0) : 0;
@@ -153,6 +191,7 @@ export const buildExportRequest = (
     ...defaultExportSettings,
     ...settings,
   };
+  const normalizedBackground = normalizeBackgroundSettings(background);
 
   const normalizedEffects = effects
     .map((effect) => clampEffect(effect, safeDuration))
@@ -168,6 +207,7 @@ export const buildExportRequest = (
     source,
     duration: safeDuration,
     effects: normalizedEffects,
+    background: normalizedBackground,
     destination: resolvedSettings.destination,
     format: resolvedSettings.format,
     resolution: resolvedSettings.resolution,
@@ -182,6 +222,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   duration: 0,
   effects: [],
   selectedEffectId: null,
+  backgroundSettings: defaultBackgroundSettings,
 
   setIsPlaying: (playing: boolean) => set({ isPlaying: playing }),
   setCurrentTime: (time: number) =>
@@ -251,4 +292,17 @@ export const useEditorStore = create<EditorState>((set) => ({
     })),
   selectEffect: (effectId: string | null) =>
     set({ selectedEffectId: effectId }),
+  updateBackgroundSettings: (updates: Partial<EditorBackgroundSettings>) =>
+    set((state) => {
+      const merged: EditorBackgroundSettings = {
+        ...state.backgroundSettings,
+        ...updates,
+      };
+
+      return {
+        backgroundSettings: normalizeBackgroundSettings(merged),
+      };
+    }),
+  resetBackgroundSettings: () =>
+    set({ backgroundSettings: defaultBackgroundSettings }),
 }));

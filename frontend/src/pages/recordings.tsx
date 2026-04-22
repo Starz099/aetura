@@ -97,7 +97,7 @@ export default function Recordings() {
                 </CardHeader>
                 <CardContent className="mt-auto pt-0">
                   <Link
-                    to={`/editor/${encodeURIComponent(video.video_url)}`}
+                    to={`/editor?src=${encodeURIComponent(video.video_url)}`}
                     className="w-full text-sm font-medium underline"
                   >
                     Open in Editor

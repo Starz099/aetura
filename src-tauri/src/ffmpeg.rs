@@ -7,17 +7,26 @@ use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-fn build_ffmpeg_args(request: &ExportRequest, filter_graph: &str, output: &str) -> Vec<String> {
+fn build_ffmpeg_args(
+    request: &ExportRequest,
+    filter_graph: &str,
+    background_input: Option<&str>,
+    output: &str,
+) -> Vec<String> {
     let resolution_filter = match request.resolution {
         ExportResolution::P720 => "scale=1280:-2",
         ExportResolution::P1080 => "scale=1920:-2",
         ExportResolution::P4k => "scale=3840:-2",
     };
     let fps_filter = format!("fps={}", request.fps);
-    let tuned_video_chain = format!(
-        "{};[vout]{},{}[vfinal]",
-        filter_graph, fps_filter, resolution_filter
-    );
+    let tuned_video_chain = if request.background.enabled {
+        format!("{};[vout]{}[vfinal]", filter_graph, fps_filter)
+    } else {
+        format!(
+            "{};[vout]{},{}[vfinal]",
+            filter_graph, fps_filter, resolution_filter
+        )
+    };
 
     let video_preset = if request.optimize_file_size {
         "veryslow"
@@ -34,11 +43,23 @@ fn build_ffmpeg_args(request: &ExportRequest, filter_graph: &str, output: &str) 
         "-y".to_string(),
         "-i".to_string(),
         request.source.clone(),
+    ];
+
+    if let Some(path) = background_input {
+        args.extend_from_slice(&[
+            "-loop".to_string(),
+            "1".to_string(),
+            "-i".to_string(),
+            path.to_string(),
+        ]);
+    }
+
+    args.extend_from_slice(&[
         "-filter_complex".to_string(),
         tuned_video_chain,
         "-map".to_string(),
         "[vfinal]".to_string(),
-    ];
+    ]);
 
     match request.format {
         ExportFormat::Gif => {
@@ -136,12 +157,13 @@ pub fn resolve_ffmpeg_binary() -> PathBuf {
 pub fn execute_ffmpeg(
     request: &ExportRequest,
     filter_graph: &str,
+    background_input: Option<&str>,
     output: &str,
     mut on_progress: impl FnMut(f64),
     should_cancel: impl Fn() -> bool,
 ) -> Result<(), AppError> {
     let ffmpeg = resolve_ffmpeg_binary();
-    let args = build_ffmpeg_args(request, filter_graph, output);
+    let args = build_ffmpeg_args(request, filter_graph, background_input, output);
 
     let mut command = Command::new(&ffmpeg);
     command.args(&args);
@@ -222,7 +244,8 @@ pub fn execute_ffmpeg(
 mod tests {
     use super::*;
     use crate::models::{
-        ExportDestination, ExportEffect, ExportFormat, ExportRequest, ExportResolution,
+        ExportBackground, ExportDestination, ExportEffect, ExportFormat, ExportRequest,
+        ExportResolution,
     };
 
     fn sample_request(format: ExportFormat) -> ExportRequest {
@@ -235,6 +258,11 @@ mod tests {
                 length: 1.0,
                 multiplier: 1.2,
             }],
+            background: ExportBackground {
+                enabled: false,
+                preset_id: "aurora-1".to_string(),
+                padding: 32,
+            },
             destination: ExportDestination::File,
             format,
             resolution: ExportResolution::P1080,
@@ -310,7 +338,7 @@ mod tests {
     #[test]
     fn test_build_args_for_mp4_includes_h264_audio_copy() {
         let request = sample_request(ExportFormat::Mp4);
-        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", "out.mp4");
+        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", None, "out.mp4");
 
         assert!(args.contains(&"libx264".to_string()));
         assert!(args.contains(&"copy".to_string()));
@@ -321,7 +349,7 @@ mod tests {
     #[test]
     fn test_build_args_for_gif_disables_audio_and_uses_gif_codec() {
         let request = sample_request(ExportFormat::Gif);
-        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", "out.gif");
+        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", None, "out.gif");
 
         assert!(args.contains(&"-an".to_string()));
         assert!(args.contains(&"gif".to_string()));
@@ -332,7 +360,7 @@ mod tests {
     #[test]
     fn test_build_args_for_720p_includes_720_scale() {
         let request = sample_request_with_resolution(ExportResolution::P720);
-        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", "out.mp4");
+        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", None, "out.mp4");
 
         assert!(args.iter().any(|arg| arg.contains("scale=1280:-2")));
     }
@@ -340,7 +368,7 @@ mod tests {
     #[test]
     fn test_build_args_for_1080p_includes_1080_scale() {
         let request = sample_request_with_resolution(ExportResolution::P1080);
-        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", "out.mp4");
+        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", None, "out.mp4");
 
         assert!(args.iter().any(|arg| arg.contains("scale=1920:-2")));
     }
@@ -348,7 +376,7 @@ mod tests {
     #[test]
     fn test_build_args_for_4k_includes_4k_scale() {
         let request = sample_request_with_resolution(ExportResolution::P4k);
-        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", "out.mp4");
+        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", None, "out.mp4");
 
         assert!(args.iter().any(|arg| arg.contains("scale=3840:-2")));
     }
@@ -356,7 +384,7 @@ mod tests {
     #[test]
     fn test_build_args_for_15fps_includes_fps_filter() {
         let request = sample_request_with_fps(15);
-        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", "out.mp4");
+        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", None, "out.mp4");
 
         assert!(args.iter().any(|arg| arg.contains("fps=15")));
     }
@@ -364,7 +392,7 @@ mod tests {
     #[test]
     fn test_build_args_for_30fps_includes_fps_filter() {
         let request = sample_request_with_fps(30);
-        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", "out.mp4");
+        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", None, "out.mp4");
 
         assert!(args.iter().any(|arg| arg.contains("fps=30")));
     }
@@ -372,8 +400,23 @@ mod tests {
     #[test]
     fn test_build_args_for_60fps_includes_fps_filter() {
         let request = sample_request_with_fps(60);
-        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", "out.mp4");
+        let args = build_ffmpeg_args(&request, "[0:v]null[vout]", None, "out.mp4");
 
         assert!(args.iter().any(|arg| arg.contains("fps=60")));
+    }
+
+    #[test]
+    fn test_build_args_with_background_adds_looped_input() {
+        let mut request = sample_request(ExportFormat::Mp4);
+        request.background.enabled = true;
+        let args = build_ffmpeg_args(
+            &request,
+            "[0:v]null[vout]",
+            Some("/tmp/aurora-1.svg"),
+            "out.mp4",
+        );
+
+        assert!(args.contains(&"-loop".to_string()));
+        assert!(args.contains(&"/tmp/aurora-1.svg".to_string()));
     }
 }

@@ -44,6 +44,22 @@ fn resolution_tag(resolution: &models::ExportResolution) -> &'static str {
     }
 }
 
+fn resolve_background_input_path(request: &ExportRequest) -> Result<Option<String>, String> {
+    if !request.background.enabled {
+        return Ok(None);
+    }
+
+    let path = filters::resolve_background_preset_path(&request.background.preset_id)
+        .ok_or_else(|| {
+            format!(
+                "Background preset asset was not found for '{}'.",
+                request.background.preset_id
+            )
+        })?;
+
+    Ok(Some(path.to_string_lossy().to_string()))
+}
+
 /// Start the export process
 /// 
 /// This command:
@@ -101,7 +117,21 @@ async fn start_export(
 
     // Build FFmpeg filter graph
     let zoom_expression = filters::build_zoom_expression(request.effects.clone());
-    let filter_graph = filters::build_filter_graph(&zoom_expression);
+    let (output_width, output_height) = filters::resolution_dimensions(&request.resolution);
+    let filter_graph = if request.background.enabled {
+        filters::build_background_filter_graph(
+            &zoom_expression,
+            output_width,
+            output_height,
+            request.background.padding,
+        )
+    } else {
+        filters::build_filter_graph(&zoom_expression)
+    };
+    let background_input_path = resolve_background_input_path(&request).map_err(|message| {
+        emit_export_status(&app, ExportStatusEvent::failed(message.clone()));
+        message
+    })?;
 
     let cancel_signal = {
         let mut runtime = runtime_state
@@ -127,6 +157,7 @@ async fn start_export(
     let ffmpeg_result = ffmpeg::execute_ffmpeg(
         &request,
         &filter_graph,
+        background_input_path.as_deref(),
         &output_path_string,
         move |percent| {
             emit_export_status(&progress_app, ExportStatusEvent::progress(percent));
