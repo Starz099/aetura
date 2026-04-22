@@ -145,7 +145,7 @@ export function EditorPreview({
                 }}
               >
                 <div
-                  className="absolute inset-0"
+                  className="absolute inset-0 overflow-hidden"
                   style={{
                     top: `${previewPadding}px`,
                     right: `${previewPadding}px`,
@@ -153,10 +153,7 @@ export function EditorPreview({
                     left: `${previewPadding}px`,
                   }}
                 >
-                  <div
-                    className="flex h-full w-full items-center justify-center origin-center transition-transform duration-150 ease-out"
-                    style={{ transform: `scale(${zoomScale})` }}
-                  >
+                  <div className="flex h-full w-full items-center justify-center">
                     <video
                       ref={videoRef}
                       src={previewUrl}
@@ -164,6 +161,11 @@ export function EditorPreview({
                       playsInline
                       muted={isMuted}
                       className="h-full w-full rounded-md bg-transparent object-cover object-center"
+                      style={{
+                        transform: `scale(${zoomScale})`,
+                        transformOrigin: "center center",
+                        transition: "transform 150ms ease-out",
+                      }}
                       onLoadedMetadata={(event) => {
                         setDuration(event.currentTarget.duration);
                         if (thumbnailMode) {
