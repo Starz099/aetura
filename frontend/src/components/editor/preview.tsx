@@ -18,6 +18,7 @@ export function EditorPreview({
   thumbnailMode = false,
 }: EditorPreviewProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const lastTimelinePushMsRef = useRef(0);
   const [isMuted, setIsMuted] = useState(true);
   const currentTime = useEditorStore((state) => state.currentTime);
   const isPlaying = useEditorStore((state) => state.isPlaying);
@@ -57,10 +58,12 @@ export function EditorPreview({
       return;
     }
 
-    if (Math.abs(video.currentTime - currentTime) > 0.05) {
+    const seekThreshold = isPlaying ? 0.25 : 0.05;
+
+    if (Math.abs(video.currentTime - currentTime) > seekThreshold) {
       video.currentTime = currentTime;
     }
-  }, [autoPlay, thumbnailMode, currentTime]);
+  }, [autoPlay, thumbnailMode, isPlaying, currentTime]);
 
   useEffect(() => {
     if (thumbnailMode) {
@@ -168,7 +171,18 @@ export function EditorPreview({
                         }
                       }}
                       onTimeUpdate={(event) => {
-                        setCurrentTime(event.currentTarget.currentTime);
+                        const nextTime = event.currentTarget.currentTime;
+                        const now = performance.now();
+
+                        // Avoid flooding global state updates while keeping timeline smooth.
+                        if (now - lastTimelinePushMsRef.current < 75) {
+                          return;
+                        }
+
+                        if (Math.abs(nextTime - currentTime) > 0.01) {
+                          lastTimelinePushMsRef.current = now;
+                          setCurrentTime(nextTime);
+                        }
                       }}
                       onPlay={() => setIsPlaying(true)}
                       onPause={() => setIsPlaying(false)}

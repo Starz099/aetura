@@ -44,6 +44,38 @@ fn default_optimize_file_size() -> bool {
     false
 }
 
+fn default_background_enabled() -> bool {
+    false
+}
+
+fn default_background_preset_id() -> String {
+    "aurora-1".to_string()
+}
+
+fn default_background_padding() -> u32 {
+    32
+}
+
+/// Background settings applied during export.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportBackground {
+    #[serde(default = "default_background_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_background_preset_id")]
+    pub preset_id: String,
+    #[serde(default = "default_background_padding")]
+    pub padding: u32,
+}
+
+fn default_background() -> ExportBackground {
+    ExportBackground {
+        enabled: default_background_enabled(),
+        preset_id: default_background_preset_id(),
+        padding: default_background_padding(),
+    }
+}
+
 /// Represents a single visual effect applied during export
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -69,6 +101,9 @@ pub struct ExportRequest {
     pub duration: f64,
     /// List of effects to apply
     pub effects: Vec<ExportEffect>,
+    /// Global background styling settings
+    #[serde(default = "default_background")]
+    pub background: ExportBackground,
     /// Export destination mode
     #[serde(default = "default_destination")]
     pub destination: ExportDestination,
@@ -190,5 +225,28 @@ mod tests {
         assert_eq!(request.effects.len(), 1);
         assert_eq!(request.effects[0].effect_type, "zoom");
         assert_eq!(request.effects[0].start_time, 1.0);
+        assert!(!request.background.enabled);
+        assert_eq!(request.background.preset_id, "aurora-1");
+        assert_eq!(request.background.padding, 32);
+    }
+
+    #[test]
+    fn test_export_request_deserializes_background_fields() {
+        let value = serde_json::json!({
+            "source": "/videos/input.mp4",
+            "duration": 12.5,
+            "effects": [],
+            "background": {
+                "enabled": true,
+                "presetId": "ocean-1",
+                "padding": 12
+            }
+        });
+
+        let request: ExportRequest = serde_json::from_value(value).expect("valid export request");
+
+        assert!(request.background.enabled);
+        assert_eq!(request.background.preset_id, "ocean-1");
+        assert_eq!(request.background.padding, 12);
     }
 }

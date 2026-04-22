@@ -80,7 +80,16 @@ const EditorPage = () => {
       recordingUrl.startsWith("http://") ||
       recordingUrl.startsWith("https://")
     ) {
-      return recordingUrl;
+      try {
+        const parsed = new URL(recordingUrl);
+        parsed.pathname = parsed.pathname
+          .split("/")
+          .map((segment) => encodeURIComponent(decodeURIComponent(segment)))
+          .join("/");
+        return parsed.toString();
+      } catch {
+        return recordingUrl;
+      }
     }
 
     return `http://localhost:8000/recordings/${encodeURIComponent(
