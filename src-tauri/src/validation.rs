@@ -1,9 +1,7 @@
 /// Validation logic for export requests
 use crate::errors::AppError;
+use crate::filters;
 use crate::models::{ExportEffect, ExportRequest};
-
-const ALLOWED_BACKGROUND_PRESETS: [&str; 4] = ["aurora-1", "ocean-1", "sunset-1", "night-1"];
-const MAX_BACKGROUND_PADDING: u32 = 64;
 
 /// Validate an export request
 pub fn validate_request(request: &ExportRequest) -> Result<(), AppError> {
@@ -21,17 +19,14 @@ fn validate_settings(request: &ExportRequest) -> Result<(), AppError> {
         ));
     }
 
-    if request.background.padding > MAX_BACKGROUND_PADDING {
+    if request.background.padding > filters::MAX_BACKGROUND_PADDING {
         return Err(AppError::ValidationError(format!(
             "Background padding must be between 0 and {}.",
-            MAX_BACKGROUND_PADDING
+            filters::MAX_BACKGROUND_PADDING
         )));
     }
 
-    if !ALLOWED_BACKGROUND_PRESETS
-        .iter()
-        .any(|preset| *preset == request.background.preset_id)
-    {
+    if !filters::is_supported_background_preset(&request.background.preset_id) {
         return Err(AppError::ValidationError(format!(
             "Unsupported background preset '{}'.",
             request.background.preset_id
@@ -106,126 +101,5 @@ fn validate_effect(effect: &ExportEffect, duration: f64) -> Result<(), AppError>
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_validate_empty_source() {
-        let request = ExportRequest {
-            source: "".to_string(),
-            duration: 10.0,
-            effects: vec![],
-            background: crate::models::ExportBackground {
-                enabled: false,
-                preset_id: "aurora-1".to_string(),
-                padding: 32,
-            },
-            destination: crate::models::ExportDestination::File,
-            format: crate::models::ExportFormat::Mp4,
-            resolution: crate::models::ExportResolution::P1080,
-            fps: 60,
-            optimize_file_size: false,
-        };
-        assert!(validate_request(&request).is_err());
-    }
-
-    #[test]
-    fn test_validate_negative_duration() {
-        let request = ExportRequest {
-            source: "test.mp4".to_string(),
-            duration: -1.0,
-            effects: vec![],
-            background: crate::models::ExportBackground {
-                enabled: false,
-                preset_id: "aurora-1".to_string(),
-                padding: 32,
-            },
-            destination: crate::models::ExportDestination::File,
-            format: crate::models::ExportFormat::Mp4,
-            resolution: crate::models::ExportResolution::P1080,
-            fps: 60,
-            optimize_file_size: false,
-        };
-        assert!(validate_request(&request).is_err());
-    }
-
-    #[test]
-    fn test_validate_valid_request() {
-        let request = ExportRequest {
-            source: "test.mp4".to_string(),
-            duration: 10.0,
-            effects: vec![],
-            background: crate::models::ExportBackground {
-                enabled: false,
-                preset_id: "aurora-1".to_string(),
-                padding: 32,
-            },
-            destination: crate::models::ExportDestination::File,
-            format: crate::models::ExportFormat::Mp4,
-            resolution: crate::models::ExportResolution::P1080,
-            fps: 60,
-            optimize_file_size: false,
-        };
-        assert!(validate_request(&request).is_ok());
-    }
-
-    #[test]
-    fn test_validate_invalid_fps() {
-        let request = ExportRequest {
-            source: "test.mp4".to_string(),
-            duration: 10.0,
-            effects: vec![],
-            background: crate::models::ExportBackground {
-                enabled: false,
-                preset_id: "aurora-1".to_string(),
-                padding: 32,
-            },
-            destination: crate::models::ExportDestination::File,
-            format: crate::models::ExportFormat::Mp4,
-            resolution: crate::models::ExportResolution::P1080,
-            fps: 24,
-            optimize_file_size: false,
-        };
-        assert!(validate_request(&request).is_err());
-    }
-
-    #[test]
-    fn test_validate_invalid_background_preset() {
-        let request = ExportRequest {
-            source: "test.mp4".to_string(),
-            duration: 10.0,
-            effects: vec![],
-            background: crate::models::ExportBackground {
-                enabled: true,
-                preset_id: "unknown".to_string(),
-                padding: 32,
-            },
-            destination: crate::models::ExportDestination::File,
-            format: crate::models::ExportFormat::Mp4,
-            resolution: crate::models::ExportResolution::P1080,
-            fps: 60,
-            optimize_file_size: false,
-        };
-        assert!(validate_request(&request).is_err());
-    }
-
-    #[test]
-    fn test_validate_invalid_background_padding() {
-        let request = ExportRequest {
-            source: "test.mp4".to_string(),
-            duration: 10.0,
-            effects: vec![],
-            background: crate::models::ExportBackground {
-                enabled: true,
-                preset_id: "aurora-1".to_string(),
-                padding: 100,
-            },
-            destination: crate::models::ExportDestination::File,
-            format: crate::models::ExportFormat::Mp4,
-            resolution: crate::models::ExportResolution::P1080,
-            fps: 60,
-            optimize_file_size: false,
-        };
-        assert!(validate_request(&request).is_err());
-    }
-}
+#[path = "tests/validation_tests.rs"]
+mod tests;

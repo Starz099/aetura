@@ -2,12 +2,40 @@
 Tool implementations - individual tool classes.
 """
 import asyncio
-import json
 import re
-from typing import Any, Dict, Optional
+from typing import Any, Dict, NoReturn
 
 from .base import Tool, ToolSchema, ToolExecutionResult, ToolExecutionError
 from .selector_builder import ElementSelector
+
+
+def _require_element_id(args: Dict[str, Any]) -> int:
+    """Validate and return required element ID argument."""
+    return ElementSelector.validate_element_id(args.get("element_id"))
+
+
+def _build_selector_from_args(args: Dict[str, Any]) -> tuple[int, str]:
+    """Build selector from validated element ID argument."""
+    element_id = _require_element_id(args)
+    return element_id, ElementSelector.build_selector(element_id)
+
+
+def _require_non_empty_string(args: Dict[str, Any], key: str) -> str:
+    """Validate and return a required non-empty string argument."""
+    value = args.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{key} must be a non-empty string")
+    return value.strip()
+
+
+def _raise_tool_error(
+    tool_name: str,
+    error_code: str,
+    prefix: str,
+    error: Exception,
+) -> NoReturn:
+    """Raise a standardized tool execution error."""
+    raise ToolExecutionError(tool_name, error_code, f"{prefix}: {str(error)}")
 
 
 class ClickElementTool(Tool):
@@ -35,12 +63,11 @@ class ClickElementTool(Tool):
         )
     
     async def validate(self, args: Dict[str, Any]) -> None:
-        ElementSelector.validate_element_id(args.get("element_id"))
+        _require_element_id(args)
     
     async def execute(self, args: Dict[str, Any], page: Any) -> ToolExecutionResult:
         try:
-            element_id = ElementSelector.validate_element_id(args.get("element_id"))
-            selector = ElementSelector.build_selector(element_id)
+            element_id, selector = _build_selector_from_args(args)
             
             await page.click(selector)
             await page.wait_for_timeout(2000)
@@ -50,11 +77,7 @@ class ClickElementTool(Tool):
                 data=f"Successfully clicked ID {element_id}."
             )
         except Exception as e:
-            raise ToolExecutionError(
-                self.name,
-                "CLICK_FAILED",
-                f"Failed to click element: {str(e)}"
-            )
+            _raise_tool_error(self.name, "CLICK_FAILED", "Failed to click element", e)
 
 
 class TypeTextTool(Tool):
@@ -86,16 +109,15 @@ class TypeTextTool(Tool):
         )
     
     async def validate(self, args: Dict[str, Any]) -> None:
-        ElementSelector.validate_element_id(args.get("element_id"))
+        _require_element_id(args)
         text = args.get("text")
         if not isinstance(text, str):
             raise ValueError("text must be a string")
     
     async def execute(self, args: Dict[str, Any], page: Any) -> ToolExecutionResult:
         try:
-            element_id = ElementSelector.validate_element_id(args.get("element_id"))
+            element_id, selector = _build_selector_from_args(args)
             text = args.get("text", "")
-            selector = ElementSelector.build_selector(element_id)
             
             await page.fill(selector, text)
             await asyncio.sleep(0.5)
@@ -105,11 +127,7 @@ class TypeTextTool(Tool):
                 data=f"Successfully typed '{text}' into ID {element_id}."
             )
         except Exception as e:
-            raise ToolExecutionError(
-                self.name,
-                "TYPING_FAILED",
-                f"Failed to type text: {str(e)}"
-            )
+            _raise_tool_error(self.name, "TYPING_FAILED", "Failed to type text", e)
 
 
 class GotoUrlTool(Tool):
@@ -137,13 +155,11 @@ class GotoUrlTool(Tool):
         )
     
     async def validate(self, args: Dict[str, Any]) -> None:
-        url = args.get("url")
-        if not isinstance(url, str) or not url.strip():
-            raise ValueError("url must be a non-empty string")
+        _require_non_empty_string(args, "url")
     
     async def execute(self, args: Dict[str, Any], page: Any) -> ToolExecutionResult:
         try:
-            url = args.get("url", "").strip()
+            url = _require_non_empty_string(args, "url")
             await page.goto(url)
             await page.wait_for_load_state("networkidle")
             
@@ -152,10 +168,11 @@ class GotoUrlTool(Tool):
                 data=f"Successfully navigated to {url}."
             )
         except Exception as e:
-            raise ToolExecutionError(
+            _raise_tool_error(
                 self.name,
                 "NAVIGATION_FAILED",
-                f"Failed to navigate to URL: {str(e)}"
+                "Failed to navigate to URL",
+                e,
             )
 
 
@@ -184,12 +201,10 @@ class FinishTaskTool(Tool):
         )
     
     async def validate(self, args: Dict[str, Any]) -> None:
-        msg = args.get("final_message")
-        if not isinstance(msg, str) or not msg.strip():
-            raise ValueError("final_message must be a non-empty string")
+        _require_non_empty_string(args, "final_message")
     
     async def execute(self, args: Dict[str, Any], page: Any) -> ToolExecutionResult:
-        msg = args.get("final_message", "").strip()
+        msg = _require_non_empty_string(args, "final_message")
         return ToolExecutionResult(
             status="success",
             data=f"FINISHED: {msg}",
@@ -226,16 +241,13 @@ class PressKeyTool(Tool):
         )
     
     async def validate(self, args: Dict[str, Any]) -> None:
-        ElementSelector.validate_element_id(args.get("element_id"))
-        key = args.get("key")
-        if not isinstance(key, str) or not key.strip():
-            raise ValueError("key must be a non-empty string")
+        _require_element_id(args)
+        _require_non_empty_string(args, "key")
     
     async def execute(self, args: Dict[str, Any], page: Any) -> ToolExecutionResult:
         try:
-            element_id = ElementSelector.validate_element_id(args.get("element_id"))
-            key = args.get("key", "").strip()
-            selector = ElementSelector.build_selector(element_id)
+            element_id, selector = _build_selector_from_args(args)
+            key = _require_non_empty_string(args, "key")
             
             await page.press(selector, key)
             if key.lower() == "enter":
@@ -246,11 +258,7 @@ class PressKeyTool(Tool):
                 data=f"Successfully pressed '{key}' on ID {element_id}."
             )
         except Exception as e:
-            raise ToolExecutionError(
-                self.name,
-                "KEY_PRESS_FAILED",
-                f"Failed to press key: {str(e)}"
-            )
+            _raise_tool_error(self.name, "KEY_PRESS_FAILED", "Failed to press key", e)
 
 
 class ExtractTextTool(Tool):
@@ -292,11 +300,7 @@ class ExtractTextTool(Tool):
                 data=f"Page Text Content:\n\n{clean_text}"
             )
         except Exception as e:
-            raise ToolExecutionError(
-                self.name,
-                "EXTRACTION_FAILED",
-                f"Failed to extract text: {str(e)}"
-            )
+            _raise_tool_error(self.name, "EXTRACTION_FAILED", "Failed to extract text", e)
 
 
 class ScrollPageTool(Tool):
@@ -359,11 +363,7 @@ class ScrollPageTool(Tool):
                 data=f"Successfully scrolled the page {direction}."
             )
         except Exception as e:
-            raise ToolExecutionError(
-                self.name,
-                "SCROLL_FAILED",
-                f"Failed to scroll page: {str(e)}"
-            )
+            _raise_tool_error(self.name, "SCROLL_FAILED", "Failed to scroll page", e)
 
 
 class HoverElementTool(Tool):
@@ -391,12 +391,11 @@ class HoverElementTool(Tool):
         )
     
     async def validate(self, args: Dict[str, Any]) -> None:
-        ElementSelector.validate_element_id(args.get("element_id"))
+        _require_element_id(args)
     
     async def execute(self, args: Dict[str, Any], page: Any) -> ToolExecutionResult:
         try:
-            element_id = ElementSelector.validate_element_id(args.get("element_id"))
-            selector = ElementSelector.build_selector(element_id)
+            element_id, selector = _build_selector_from_args(args)
             
             await page.hover(selector)
             await asyncio.sleep(1.5)
@@ -406,8 +405,4 @@ class HoverElementTool(Tool):
                 data=f"Successfully hovered over ID {element_id}."
             )
         except Exception as e:
-            raise ToolExecutionError(
-                self.name,
-                "HOVER_FAILED",
-                f"Failed to hover over element: {str(e)}"
-            )
+            _raise_tool_error(self.name, "HOVER_FAILED", "Failed to hover over element", e)

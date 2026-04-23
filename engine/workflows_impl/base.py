@@ -3,12 +3,12 @@
 import asyncio
 import json
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from ai_engine import AIEngine
 from browser_engine import BrowserEngine
 from dom.parser import parse_dom_state
-from models.script import DOMElement, Step
+from models.script import Action, DOMElement, Step
 from tools.dom_extractor import extract_clean_dom
 from tools.manager import AGENT_TOOLS, execute_tool
 
@@ -118,7 +118,7 @@ class Workflow(ABC):
         return text[:limit].rstrip() + "..."
 
     @staticmethod
-    def _trim_memory_entries(entries: List[str], keep_last: int = 6) -> List[str]:
+    def _trim_memory_entries(entries: List[str], keep_last: int = 10) -> List[str]:
         """Keep only the most recent memory entries."""
         if len(entries) <= keep_last:
             return entries
@@ -147,29 +147,6 @@ class Workflow(ABC):
                 pass
 
         return f"{url}\n{scroll_signature}\n{webpage_context}"
-
-    @staticmethod
-    def _goal_requires_like_click(intent: str) -> bool:
-        """Detect whether the intent explicitly requires clicking like."""
-        lowered = intent.lower()
-        return "like" in lowered
-
-    @staticmethod
-    def _did_click_like(steps: List[Step]) -> bool:
-        """Check whether any click step targeted an element labeled like."""
-        for step in steps:
-            if step.action_taken.tool_name != "click_element":
-                continue
-
-            element_id = step.action_taken.arguments.get("element_id")
-            if element_id is None:
-                continue
-
-            for element in step.available_elements:
-                if element.element_id == element_id and "like" in element.text.lower():
-                    return True
-
-        return False
 
     @staticmethod
     def _normalize_tool_arguments(arguments: Any) -> Dict[str, Any]:
@@ -215,21 +192,153 @@ class Workflow(ABC):
         assert self.page is not None, "Page not initialized"
         return await execute_tool(tool_call, self.page)
 
+    async def _run_ai_steps(
+        self,
+        intent: str,
+        step_count: int,
+        max_steps: int,
+        script_steps: List[Step],
+        prompt_builder: Callable[[str], tuple[str, str]],
+        memory_empty_message: str,
+        api_error_message: str,
+        step_label_suffix: str = "",
+        announce_message: Optional[str] = None,
+        print_action_result: bool = False,
+        print_finished_message: bool = False,
+        print_no_tool_message: bool = False,
+    ) -> tuple[int, List[Step]]:
+        """Run shared AI-driven action loop used by draft and resume workflows."""
+        assert self.page is not None, "Page not initialized"
+
+        max_attempts = max_steps * 3
+        attempt_count = 0
+        memory_entries: List[str] = []
+        previous_snapshot = ""
+        stagnant_count = 0
+        last_action_signature = ""
+        same_action_no_progress_count = 0
+
+        if announce_message:
+            print(announce_message)
+
+        while step_count < max_steps:
+            attempt_count += 1
+            if attempt_count > max_attempts:
+                raise RuntimeError("Workflow stalled after too many attempts.")
+
+            next_step_number = step_count + 1
+            print(f"\n--- Step {next_step_number}{step_label_suffix} ---")
+
+            _, parsed_dom = await self._extract_and_parse_dom()
+            system_prompt, user_prompt = prompt_builder(intent)
+            webpage_context = self._format_dom_context(parsed_dom)
+            progress_context = self._summarize_progress(script_steps)
+
+            user_prompt += f"\n\nCurrent URL: {self.page.url}\n"
+            user_prompt += f"--- COMPLETED STEPS ---\n{progress_context}\n"
+            user_prompt += (
+                "--- MEMORY LOG ---\n"
+                f"{chr(10).join(memory_entries) if memory_entries else memory_empty_message}\n"
+            )
+            user_prompt += f"--- CURRENT WEBPAGE ---\n{webpage_context}\n"
+
+            try:
+                ai_response = await self._get_ai_decision(system_prompt, user_prompt)
+            except Exception as error:
+                print(f"API Error: {str(error)}")
+                memory_entries.append(api_error_message)
+                memory_entries = self._trim_memory_entries(memory_entries)
+                await asyncio.sleep(1)
+                continue
+
+            if not ai_response.tool_calls:
+                if print_no_tool_message:
+                    print("\nWorkflow completed (no tools used).")
+                break
+
+            tool_call = ai_response.tool_calls[0]
+            args = self._normalize_tool_arguments(tool_call.function.arguments)
+            action_signature = self._tool_signature(
+                tool_call.function.name,
+                args,
+                self.page.url,
+            )
+
+            action_result = await self._execute_tool_call(tool_call)
+            if print_action_result:
+                print(f"Action Result: {action_result}")
+
+            action = Action(
+                tool_name=tool_call.function.name,
+                arguments=args,
+                description=f"Used {tool_call.function.name}",
+            )
+
+            step = Step(
+                step_number=next_step_number,
+                current_url=self.page.url,
+                action_taken=action,
+                available_elements=parsed_dom,
+            )
+            script_steps.append(step)
+            memory_entries.append(
+                f"- Tool '{tool_call.function.name}' returned: {self._summarize_tool_result(action_result)}"
+            )
+            memory_entries = self._trim_memory_entries(memory_entries)
+            step_count = next_step_number
+
+            # Re-read page state after the action to detect real progress.
+            _, post_parsed_dom = await self._extract_and_parse_dom()
+            post_context = self._format_dom_context(post_parsed_dom)
+            current_snapshot = await self._page_snapshot(self.page.url, post_context)
+
+            if (
+                action_signature == last_action_signature
+                and current_snapshot == previous_snapshot
+            ):
+                same_action_no_progress_count += 1
+            else:
+                same_action_no_progress_count = 0
+            last_action_signature = action_signature
+
+            if current_snapshot == previous_snapshot:
+                stagnant_count += 1
+            else:
+                stagnant_count = 0
+            previous_snapshot = current_snapshot
+
+            if same_action_no_progress_count >= 3:
+                print("Workflow stalled: repeating same action without progress.")
+                break
+
+            if stagnant_count >= 4:
+                print("Workflow stalled: page state is not changing.")
+                break
+
+            if "FINISHED:" in action_result:
+                if print_finished_message:
+                    print("\nWorkflow completed successfully.")
+                break
+
+            await self.page.wait_for_load_state("networkidle")
+            await asyncio.sleep(1)
+
+        return step_count, script_steps
+
     async def _replay_approved_steps(
         self,
         steps: List[Dict[str, Any]],
-    ) -> tuple[int, str, List[Step]]:
+    ) -> tuple[int, List[Step]]:
         """
-        Replay approved steps and return step count, memory, and script steps.
+        Replay approved steps and return step count and script steps.
 
         Args:
             steps: List of approved steps to replay
 
         Returns:
-            Tuple of (step_count, memory, script_steps)
+            Tuple of (step_count, script_steps)
         """
         step_count = 0
-        memory = ""
         script_steps = []
 
         print(f"\n[Replaying {len(steps)} approved steps...]")
@@ -243,13 +352,12 @@ class Workflow(ABC):
             action_args = step_data["action_taken"]["arguments"]
 
             mock_call = MockToolCall(action_name, action_args)
-            action_result = await self._execute_tool_call(mock_call)
+            await self._execute_tool_call(mock_call)
 
             script_steps.append(Step(**step_data))
-            memory += f"\n- Tool '{action_name}' returned: {action_result}\n"
 
             assert self.page is not None
             await self.page.wait_for_load_state("networkidle")
             await asyncio.sleep(1)
 
-        return step_count, memory, script_steps
+        return step_count, script_steps

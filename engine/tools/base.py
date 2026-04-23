@@ -90,7 +90,14 @@ class ToolRegistry:
     
     def get_all_schemas(self) -> List[Dict[str, Any]]:
         """Get OpenAI-compatible schemas for all registered tools."""
-        return [tool.get_schema().to_dict() for tool in self.get_all_tools()]
+        schemas: List[Dict[str, Any]] = []
+        for tool in self.get_all_tools():
+            schema = tool.get_schema().to_dict()
+            function_schema = schema.get("function")
+            if isinstance(function_schema, dict):
+                function_schema["name"] = tool.name
+            schemas.append(schema)
+        return schemas
     
     async def execute_tool(self, tool_name: str, args: Dict[str, Any], page: Any) -> ToolExecutionResult:
         """Execute a tool by name with given arguments."""

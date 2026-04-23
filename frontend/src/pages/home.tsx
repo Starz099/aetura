@@ -258,7 +258,7 @@ function Home() {
                 id="url-input"
                 ref={urlRef}
                 placeholder="Enter URL"
-                defaultValue="https://starzz.dev/"
+                defaultValue="https://leerio.vercel.app/"
               />
             </div>
 
@@ -268,7 +268,7 @@ function Home() {
                 id="intent-input"
                 ref={intentRef}
                 placeholder="Enter intent"
-                defaultValue="go to the blog section and go the tura blog and then scroll down a little little until we reach the end of the page then click on the like button."
+                defaultValue="scroll down a little little until we reach the end of the page then toggle the theme of the page."
               />
             </div>
 
