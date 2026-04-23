@@ -51,15 +51,15 @@ def _sanitize_recording_settings(
 
     settings = dict(DEFAULT_RECORDING_SETTINGS)
 
-    capture_fps = _clamp_int(
-        recording_settings.get("capture_fps"),
-        settings["capture_fps"],
-        15,
-        60,
-    )
+    # Only accept explicit supported FPS values; unsupported values fall back to default.
+    capture_fps = recording_settings.get("capture_fps")
+    try:
+        parsed_capture_fps = int(capture_fps)
+    except (TypeError, ValueError):
+        parsed_capture_fps = settings["capture_fps"]
     settings["capture_fps"] = (
-        capture_fps
-        if capture_fps in ALLOWED_CAPTURE_FPS
+        parsed_capture_fps
+        if parsed_capture_fps in ALLOWED_CAPTURE_FPS
         else settings["capture_fps"]
     )
 

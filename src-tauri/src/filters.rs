@@ -2,6 +2,8 @@
 use crate::models::{ExportEffect, ExportResolution};
 use std::path::PathBuf;
 
+pub const MAX_BACKGROUND_PADDING: u32 = 64;
+
 /// Build FFmpeg zoom expression from effects
 ///
 /// Generates an expression like: `1*if(between(t,0.0,1.5),1.5,1)*if(between(t,3.0,4.5),2.0,1)`
@@ -47,7 +49,7 @@ pub fn build_background_filter_graph(
     output_height: u32,
     padding: u32,
 ) -> String {
-    let clamped_padding = padding.min(64);
+    let clamped_padding = padding.min(MAX_BACKGROUND_PADDING);
     let max_padding_x = (output_width / 2).saturating_sub(1);
     let max_padding_y = (output_height / 2).saturating_sub(1);
     let safe_padding = clamped_padding.min(max_padding_x).min(max_padding_y);
@@ -81,6 +83,10 @@ pub fn background_preset_filename(preset_id: &str) -> Option<&'static str> {
     }
 }
 
+pub fn is_supported_background_preset(preset_id: &str) -> bool {
+    background_preset_filename(preset_id).is_some()
+}
+
 pub fn resolve_background_preset_path(preset_id: &str) -> Option<PathBuf> {
     let filename = background_preset_filename(preset_id)?;
     let candidates = [
@@ -93,65 +99,5 @@ pub fn resolve_background_preset_path(preset_id: &str) -> Option<PathBuf> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_empty_effects_returns_identity() {
-        let expression = build_zoom_expression(vec![]);
-        assert_eq!(expression, "1");
-    }
-
-    #[test]
-    fn test_single_effect() {
-        let effects = vec![ExportEffect {
-            effect_type: "zoom".to_string(),
-            start_time: 0.0,
-            length: 2.0,
-            multiplier: 1.5,
-        }];
-        let expression = build_zoom_expression(effects);
-        assert!(expression.contains("1.500000"));
-    }
-
-    #[test]
-    fn test_effects_sorted_by_start_time() {
-        let effects = vec![
-            ExportEffect {
-                effect_type: "zoom".to_string(),
-                start_time: 5.0,
-                length: 1.0,
-                multiplier: 2.0,
-            },
-            ExportEffect {
-                effect_type: "zoom".to_string(),
-                start_time: 1.0,
-                length: 1.0,
-                multiplier: 1.5,
-            },
-        ];
-        let expression = build_zoom_expression(effects);
-        // Should process later effect first due to sorting
-        assert!(expression.contains("1.500000"));
-    }
-
-    #[test]
-    fn test_resolution_dimensions() {
-        assert_eq!(resolution_dimensions(&ExportResolution::P720), (1280, 720));
-        assert_eq!(resolution_dimensions(&ExportResolution::P1080), (1920, 1080));
-        assert_eq!(resolution_dimensions(&ExportResolution::P4k), (3840, 2160));
-    }
-
-    #[test]
-    fn test_background_filter_graph_contains_expected_overlay() {
-        let graph = build_background_filter_graph("1.200000", 1920, 1080, 32);
-        assert!(graph.contains("overlay=x=32:y=32"));
-        assert!(graph.contains("[1:v]scale=w=1920:h=1080"));
-    }
-
-    #[test]
-    fn test_background_preset_filename_known() {
-        assert_eq!(background_preset_filename("aurora-1"), Some("aurora-1.svg"));
-        assert_eq!(background_preset_filename("unknown"), None);
-    }
-}
+#[path = "tests/filters_tests.rs"]
+mod tests;

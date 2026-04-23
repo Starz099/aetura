@@ -13,8 +13,10 @@ class ElementSelector:
     @staticmethod
     def build_selector(element_id: int) -> str:
         """Build a selector for an element by its aetura ID."""
-        if not isinstance(element_id, int) or element_id < 0:
+        if not isinstance(element_id, int):
             raise ValueError(f"Invalid element_id: {element_id}")
+        if element_id < 0:
+            raise ValueError(f"element_id must be non-negative, got {element_id}")
         return f"[{ElementSelector.ELEMENT_ID_ATTR}='{element_id}']"
     
     @staticmethod

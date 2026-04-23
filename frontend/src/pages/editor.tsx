@@ -183,7 +183,7 @@ const EditorPage = () => {
         </div>
 
         <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.25fr)_420px]">
-          <section className="min-h-0">
+          <section className="flex h-full min-h-0 overflow-hidden">
             <EditorPreview
               key={previewUrl ?? "export-preview"}
               previewUrl={previewUrl}

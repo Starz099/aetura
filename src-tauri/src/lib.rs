@@ -4,6 +4,8 @@ mod errors;
 mod ffmpeg;
 mod filters;
 mod models;
+#[cfg(test)]
+mod tests;
 mod validation;
 
 use models::{ExportRequest, ExportResult, ExportStatusEvent};

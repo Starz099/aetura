@@ -3,6 +3,7 @@ Unit tests for DOM extraction strategy and parsing.
 """
 import pytest
 import json
+from unittest.mock import AsyncMock
 from engine.dom.strategy import DOMExtractorV1, DOMStrategy
 from engine.dom.parser import parse_dom_state, merge_dom_states
 from engine.models.script import DOMElement
@@ -35,11 +36,12 @@ class TestDOMExtractorV1:
             {"element_id": 0, "element_type": "button", "text": "Click me", "href": None},
             {"element_id": 1, "element_type": "input", "text": "", "href": None}
         ])
-        mock_page.evaluate = pytest.mark.asyncio.fixture(lambda self: dom_json)
-        
-        # Note: In a real test, we'd properly mock this
-        # For now, we're just verifying the method exists and has right signature
-        assert hasattr(extractor, "extract")
+        mock_page.evaluate = AsyncMock(return_value=dom_json)
+
+        result = await extractor.extract(mock_page)
+
+        assert result == dom_json
+        mock_page.evaluate.assert_called_once_with(extractor.extractor_javascript)
 
 
 class TestParseDOMState:
