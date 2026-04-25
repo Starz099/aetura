@@ -1,5 +1,6 @@
 use crate::models::{
-    ExportBackground, ExportDestination, ExportEffect, ExportFormat, ExportRequest, ExportResolution,
+    ExportBackground, ExportDestination, ExportEffect, ExportFormat, ExportRequest,
+    ExportResolution,
 };
 
 pub fn sample_effect() -> ExportEffect {

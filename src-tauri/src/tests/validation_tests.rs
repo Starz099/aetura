@@ -18,7 +18,9 @@ fn test_validate_negative_duration() {
     });
 
     let error = validate_request(&request).expect_err("expected validation error");
-    assert!(error.message().contains("Duration must be a non-negative number"));
+    assert!(error
+        .message()
+        .contains("Duration must be a non-negative number"));
 }
 
 #[test]
@@ -37,7 +39,9 @@ fn test_validate_invalid_fps() {
     });
 
     let error = validate_request(&request).expect_err("expected validation error");
-    assert!(error.message().contains("Frame rate must be one of: 15, 30, 60"));
+    assert!(error
+        .message()
+        .contains("Frame rate must be one of: 15, 30, 60"));
 }
 
 #[test]
@@ -59,5 +63,7 @@ fn test_validate_invalid_background_padding() {
     });
 
     let error = validate_request(&request).expect_err("expected validation error");
-    assert!(error.message().contains("Background padding must be between 0 and"));
+    assert!(error
+        .message()
+        .contains("Background padding must be between 0 and"));
 }

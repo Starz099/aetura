@@ -51,19 +51,20 @@ fn resolve_background_input_path(request: &ExportRequest) -> Result<Option<Strin
         return Ok(None);
     }
 
-    let path = filters::resolve_background_preset_path(&request.background.preset_id)
-        .ok_or_else(|| {
+    let path = filters::resolve_background_preset_path(&request.background.preset_id).ok_or_else(
+        || {
             format!(
                 "Background preset asset was not found for '{}'.",
                 request.background.preset_id
             )
-        })?;
+        },
+    )?;
 
     Ok(Some(path.to_string_lossy().to_string()))
 }
 
 /// Start the export process
-/// 
+///
 /// This command:
 /// 1. Validates the export request
 /// 2. Prompts user for output path
@@ -107,11 +108,11 @@ async fn start_export(
         format_extension,
         default_directory.as_deref(),
     )
-        .map_err(|e| {
-            let message = e.message();
-            emit_export_status(&app, ExportStatusEvent::failed(message.clone()));
-            message
-        })?;
+    .map_err(|e| {
+        let message = e.message();
+        emit_export_status(&app, ExportStatusEvent::failed(message.clone()));
+        message
+    })?;
 
     // Enforce extension to match selected format even if the dialog returns a stale extension.
     output_path.set_extension(format_extension);
@@ -166,7 +167,7 @@ async fn start_export(
         },
         move || cancel_signal.load(Ordering::SeqCst),
     )
-        .map_err(|e| e.message());
+    .map_err(|e| e.message());
 
     if let Ok(mut runtime) = runtime_state.inner.lock() {
         runtime.is_running = false;
@@ -188,9 +189,12 @@ async fn start_export(
     );
 
     // Emit success event
-    let _ = app.emit("export-finished", &ExportResult {
-        output_path: output_path_string.clone(),
-    });
+    let _ = app.emit(
+        "export-finished",
+        &ExportResult {
+            output_path: output_path_string.clone(),
+        },
+    );
 
     Ok(ExportResult {
         output_path: output_path_string,
@@ -219,16 +223,23 @@ fn select_directory(initial_directory: Option<String>) -> Result<Option<String>,
     dialogs::select_directory(initial_directory).map_err(|e| e.message())
 }
 
-/// Open a directory in system file explorer
+/// Open a path (file or directory) in system file explorer
 #[tauri::command]
-fn open_directory_in_explorer(directory: String) -> Result<(), String> {
-    dialogs::open_directory_in_explorer(&directory).map_err(|e| e.message())
+fn open_path_in_explorer(path: String) -> Result<(), String> {
+    dialogs::open_path_in_explorer(&path).map_err(|e| e.message())
 }
 
+/// Copy a file to system clipboard
+#[tauri::command]
+fn copy_file_to_clipboard(path: String) -> Result<(), String> {
+    dialogs::copy_file_to_clipboard(&path).map_err(|e| e.message())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(ExportRuntimeState::default())
         .setup(|app| {
             if cfg!(debug_assertions) {
@@ -244,7 +255,8 @@ pub fn run() {
             start_export,
             cancel_export,
             select_directory,
-            open_directory_in_explorer
+            open_path_in_explorer,
+            copy_file_to_clipboard
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

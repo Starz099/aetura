@@ -50,7 +50,10 @@ fn test_effects_sorted_by_start_time() {
 #[test]
 fn test_resolution_dimensions() {
     assert_eq!(resolution_dimensions(&ExportResolution::P720), (1280, 720));
-    assert_eq!(resolution_dimensions(&ExportResolution::P1080), (1920, 1080));
+    assert_eq!(
+        resolution_dimensions(&ExportResolution::P1080),
+        (1920, 1080)
+    );
     assert_eq!(resolution_dimensions(&ExportResolution::P4k), (3840, 2160));
 }
 

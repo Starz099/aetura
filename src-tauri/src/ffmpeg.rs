@@ -186,11 +186,13 @@ pub fn execute_ffmpeg(
 
     for line_result in BufReader::new(stderr).lines() {
         if should_cancel() {
-            child
-                .kill()
-                .map_err(|error| AppError::Cancelled(format!("Could not stop ffmpeg: {}", error)))?;
+            child.kill().map_err(|error| {
+                AppError::Cancelled(format!("Could not stop ffmpeg: {}", error))
+            })?;
             let _ = child.wait();
-            return Err(AppError::Cancelled("Encoding interrupted by user".to_string()));
+            return Err(AppError::Cancelled(
+                "Encoding interrupted by user".to_string(),
+            ));
         }
 
         let line = line_result.map_err(|error| {
@@ -204,7 +206,8 @@ pub fn execute_ffmpeg(
 
         if request.duration > 0.0 {
             if let Some(encoded_seconds) = parse_ffmpeg_time_seconds(&line) {
-                let percent = ((encoded_seconds / request.duration as f64) * 100.0).clamp(0.0, 100.0);
+                let percent =
+                    ((encoded_seconds / request.duration as f64) * 100.0).clamp(0.0, 100.0);
                 let whole_percent = percent.floor() as i32;
 
                 if whole_percent > last_emitted_percent {
@@ -218,7 +221,9 @@ pub fn execute_ffmpeg(
     if should_cancel() {
         let _ = child.kill();
         let _ = child.wait();
-        return Err(AppError::Cancelled("Encoding interrupted by user".to_string()));
+        return Err(AppError::Cancelled(
+            "Encoding interrupted by user".to_string(),
+        ));
     }
 
     let status = child.wait().map_err(|error| {
@@ -226,10 +231,7 @@ pub fn execute_ffmpeg(
     })?;
 
     if !status.success() {
-        let tail = last_stderr_lines
-            .into_iter()
-            .collect::<Vec<_>>()
-            .join("\n");
+        let tail = last_stderr_lines.into_iter().collect::<Vec<_>>().join("\n");
 
         return Err(AppError::FFmpegError(format!(
             "Export failed during rendering:\n{}",

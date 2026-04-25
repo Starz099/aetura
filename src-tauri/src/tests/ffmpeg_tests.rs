@@ -59,13 +59,15 @@ fn test_parse_ffmpeg_time_seconds_with_invalid_time_returns_none() {
 
 #[test]
 fn test_parse_ffmpeg_time_seconds_from_out_time_ms_line() {
-    let seconds = parse_ffmpeg_time_seconds("out_time_ms=1250000").expect("expected parsed out_time_ms");
+    let seconds =
+        parse_ffmpeg_time_seconds("out_time_ms=1250000").expect("expected parsed out_time_ms");
     assert_close(seconds, 1.25);
 }
 
 #[test]
 fn test_parse_ffmpeg_time_seconds_from_out_time_line() {
-    let seconds = parse_ffmpeg_time_seconds("out_time=00:00:04.20").expect("expected parsed out_time");
+    let seconds =
+        parse_ffmpeg_time_seconds("out_time=00:00:04.20").expect("expected parsed out_time");
     assert_close(seconds, 4.2);
 }
 
@@ -150,7 +152,12 @@ fn test_build_args_with_background_adds_looped_input() {
     let request = with_request(|request| {
         request.background.enabled = true;
     });
-    let args = build_ffmpeg_args(&request, "[0:v]null[vout]", Some("/tmp/aurora-1.svg"), "out.mp4");
+    let args = build_ffmpeg_args(
+        &request,
+        "[0:v]null[vout]",
+        Some("/tmp/aurora-1.svg"),
+        "out.mp4",
+    );
 
     assert!(args.contains(&"-loop".to_string()));
     assert!(args.contains(&"/tmp/aurora-1.svg".to_string()));

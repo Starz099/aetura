@@ -21,6 +21,8 @@ import { EditorPreview } from "@/components/editor/preview";
 import { EditorTimeline } from "@/components/editor/timeline";
 import { BackgroundToolPanel } from "@/components/editor/tools";
 import { useExport } from "@/services/export";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { invoke } from "@tauri-apps/api/core";
 
 const effectTools = ["Zoom", "Background"];
 const selectedOptionClass =
@@ -48,6 +50,8 @@ const EditorPage = () => {
   const {
     status,
     isExporting,
+    isSuccess,
+    outputPath,
     message,
     progressPercent,
     export: handleExport,
@@ -59,6 +63,8 @@ const EditorPage = () => {
   const [selectedResolution, setSelectedResolution] =
     useState<ExportResolution>("1080p");
   const [selectedFps, setSelectedFps] = useState<15 | 30 | 60>(60);
+  const [copied, setCopied] = useState(false);
+
   const resetTimeline = useEditorStore((state) => state.resetTimeline);
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
   const selectEffect = useEditorStore((state) => state.selectEffect);
@@ -103,6 +109,7 @@ const EditorPage = () => {
       return;
     }
 
+    setCopied(false);
     const exportRequest = buildExportRequest(
       previewUrl,
       duration,
@@ -127,6 +134,35 @@ const EditorPage = () => {
     }
 
     setShowExportSettings(true);
+  };
+
+  const onOpenFolder = async () => {
+    if (!outputPath) return;
+    try {
+      // Use the custom backend command which handles WSL path conversion
+      await invoke("open_path_in_explorer", { path: outputPath });
+    } catch (err) {
+      console.error(
+        "Failed to open file location via custom command, trying plugin:",
+        err,
+      );
+      try {
+        await revealItemInDir(outputPath);
+      } catch (pluginErr) {
+        console.error("Failed to open file location via plugin:", pluginErr);
+      }
+    }
+  };
+
+  const onCopyToClipboard = async () => {
+    if (!outputPath) return;
+    try {
+      await invoke("copy_file_to_clipboard", { path: outputPath });
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy video to clipboard:", err);
+    }
   };
 
   const isActivelyProcessing = isExporting;
@@ -347,6 +383,26 @@ const EditorPage = () => {
               >
                 {isActivelyProcessing ? "Exporting..." : "Export to File"}
               </Button>
+
+              {isSuccess && outputPath ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    onClick={onOpenFolder}
+                  >
+                    open file location
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="w-full"
+                    onClick={onCopyToClipboard}
+                  >
+                    {copied ? "copied!" : "copy to clipboard"}
+                  </Button>
+                </div>
+              ) : null}
+
               {isActivelyProcessing ? (
                 <Button
                   variant="destructive"

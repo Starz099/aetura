@@ -18,5 +18,8 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.10.1",
     "concurrently": "^9.2.1"
+  },
+  "dependencies": {
+    "@tauri-apps/plugin-clipboard-manager": "~2.3.2"
   }
 }
