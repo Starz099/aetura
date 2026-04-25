@@ -1,4 +1,9 @@
-import { FastForward, Pause, Play, Rewind } from "@phosphor-icons/react";
+import {
+  FastForwardIcon,
+  PauseIcon,
+  PlayIcon,
+  RewindIcon,
+} from "@phosphor-icons/react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button, Card, CardContent } from "@/components/ui";
@@ -137,7 +142,7 @@ export function EditorTimeline() {
             disabled={duration <= 0}
             aria-label="Seek backward 5 seconds"
           >
-            <Rewind size={16} />
+            <RewindIcon size={16} />
           </Button>
 
           <Button
@@ -148,7 +153,11 @@ export function EditorTimeline() {
             disabled={duration <= 0}
             aria-label={isPlaying ? "Pause playback" : "Play playback"}
           >
-            {isPlaying ? <Pause size={16} /> : <Play size={16} weight="fill" />}
+            {isPlaying ? (
+              <PauseIcon size={16} />
+            ) : (
+              <PlayIcon size={16} weight="fill" />
+            )}
           </Button>
 
           <Button
@@ -160,7 +169,7 @@ export function EditorTimeline() {
             disabled={duration <= 0}
             aria-label="Seek forward 5 seconds"
           >
-            <FastForward size={16} />
+            <FastForwardIcon size={16} />
           </Button>
 
           <div className="ml-auto text-right text-[11px] font-medium tracking-wide text-muted-foreground">

@@ -9,7 +9,7 @@ import {
 } from "@/components/ui";
 import { Button } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { useParams, useSearchParams } from "react-router-dom";
 import {
   buildExportRequest,
   type ExportFormat,
@@ -432,23 +432,6 @@ const EditorPage = () => {
           </section>
 
           <aside className="flex min-h-0 flex-col gap-2 overflow-y-auto rounded-lg border-2 border-border bg-card p-2 shadow-[0_4px_0_var(--shadow-strong)]">
-            <Button
-              asChild
-              variant="outline"
-              className="h-8 w-12 px-0 text-[10px]"
-            >
-              <Link to="/">Home</Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="h-8 w-12 px-0 text-[10px]"
-            >
-              <Link to="/recordings">Rec</Link>
-            </Button>
-
-            <Separator className="my-0.5" />
-
             <Button
               size="icon"
               className="h-12 w-12 self-center"

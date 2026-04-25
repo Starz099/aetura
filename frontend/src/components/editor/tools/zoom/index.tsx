@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Button,
@@ -36,6 +36,7 @@ export function ZoomToolPanel() {
   const updateEffect = useEditorStore((state) => state.updateEffect);
   const removeEffect = useEditorStore((state) => state.removeEffect);
   const selectEffect = useEditorStore((state) => state.selectEffect);
+
   const [draftStartTime, setDraftStartTime] = useState(
     () => effect?.startTime ?? 0,
   );
@@ -45,6 +46,15 @@ export function ZoomToolPanel() {
   const [draftMultiplier, setDraftMultiplier] = useState(
     () => effect?.multiplier ?? 1,
   );
+
+  // Sync draft state with store updates (e.g. from timeline dragging)
+  useEffect(() => {
+    if (effect) {
+      setDraftStartTime(effect.startTime);
+      setDraftLength(effect.length);
+      setDraftMultiplier(effect.multiplier);
+    }
+  }, [effect?.startTime, effect?.length, effect?.multiplier]);
 
   if (!effect || !selectedEffectId) {
     return null;
