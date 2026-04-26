@@ -17,6 +17,7 @@
     "core:window:allow-close",
     "clipboard-manager:default",
     "opener:default",
-    "opener:allow-reveal-item-in-dir"
+    "opener:allow-reveal-item-in-dir",
+    "shell:default"
   ]
 }

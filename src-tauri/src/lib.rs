@@ -12,6 +12,8 @@ use models::{ExportRequest, ExportResult, ExportStatusEvent};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::Emitter;
+use tauri::Manager;
+use tauri_plugin_shell::ShellExt;
 
 const EXPORT_STATUS_EVENT: &str = "export-status";
 
@@ -238,6 +240,7 @@ fn copy_file_to_clipboard(path: String) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(ExportRuntimeState::default())
@@ -249,6 +252,32 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Resolve persistent data directory for recordings and cache.
+            // This ensures files are stored in a writable user directory.
+            let app_data_dir = app.path().app_data_dir()
+                .map_err(|e| e.to_string())?
+                .join("Aetura");
+            
+            if !app_data_dir.exists() {
+                std::fs::create_dir_all(&app_data_dir).map_err(|e| e.to_string())?;
+            }
+
+            let app_data_dir_str = app_data_dir.to_string_lossy().to_string();
+            
+            // Set environment variable so both Rust and the Python sidecar use the same data folder.
+            std::env::set_var("AETURA_DATA_DIR", &app_data_dir_str);
+
+            // Spawn the Python engine sidecar in production.
+            #[cfg(not(debug_assertions))]
+            {
+                let _ = app.shell()
+                    .sidecar("aetura-engine")
+                    .map_err(|e| e.to_string())?
+                    .spawn()
+                    .map_err(|e| e.to_string())?;
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

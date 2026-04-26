@@ -140,7 +140,27 @@ pub fn resolve_ffmpeg_binary() -> PathBuf {
     // Check current executable directory
     if let Ok(current_exe) = env::current_exe() {
         if let Some(exe_dir) = current_exe.parent() {
-            let candidates = [exe_dir.join("ffmpeg"), exe_dir.join("ffmpeg.exe")];
+            let mut candidates = vec![
+                exe_dir.join("ffmpeg"),
+                exe_dir.join("ffmpeg.exe"),
+            ];
+
+            // Add sidecar-style names (e.g. ffmpeg-x86_64-pc-windows-msvc.exe)
+            // This is helpful for Tauri production bundles.
+            #[cfg(target_os = "windows")]
+            {
+                candidates.push(exe_dir.join("ffmpeg-x86_64-pc-windows-msvc.exe"));
+            }
+            #[cfg(target_os = "linux")]
+            {
+                candidates.push(exe_dir.join("ffmpeg-x86_64-unknown-linux-gnu"));
+            }
+            #[cfg(target_os = "macos")]
+            {
+                candidates.push(exe_dir.join("ffmpeg-x86_64-apple-darwin"));
+                candidates.push(exe_dir.join("ffmpeg-aarch64-apple-darwin"));
+            }
+
             for candidate in candidates {
                 if candidate.exists() {
                     return candidate;

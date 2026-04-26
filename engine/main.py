@@ -8,7 +8,12 @@ from orchestrator import draft_demo_script, resume_demo_script, record_demo_vide
 from typing import List, Any, Optional, Literal, Dict
 from fastapi.staticfiles import StaticFiles
 
-os.makedirs("recordings", exist_ok=True)
+# Define data directory for persistence across installations
+DATA_DIR = os.environ.get("AETURA_DATA_DIR", os.getcwd())
+RECORDINGS_DIR = os.path.join(DATA_DIR, "recordings")
+CACHE_FILE = os.path.join(DATA_DIR, "dev_cache.json")
+
+os.makedirs(RECORDINGS_DIR, exist_ok=True)
 app = FastAPI(title="Aetura Engine API")
 
 app.add_middleware(
@@ -19,7 +24,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/recordings", StaticFiles(directory="recordings"), name="recordings")
+app.mount("/recordings", StaticFiles(directory=RECORDINGS_DIR), name="recordings")
 
 
 class ExploreRequest(BaseModel):
@@ -97,7 +102,7 @@ async def explore_website(request: ExploreRequest):
             raise HTTPException(status_code=429, detail=str(error)) from error
         raise HTTPException(status_code=422, detail=str(error)) from error
 
-    with open("dev_cache.json", "w") as f:
+    with open(CACHE_FILE, "w") as f:
         json.dump(ai_result, f)
 
     return {"status": "success", "agent_message": ai_result}
@@ -144,7 +149,7 @@ async def record_website(request: RecordRequest):
 @app.get("/dev/load-cache")
 async def load_dev_cache():
     try:
-        with open("dev_cache.json", "r") as f:
+        with open(CACHE_FILE, "r") as f:
             cached_data = json.load(f)
             return cached_data
     except FileNotFoundError:
@@ -155,10 +160,10 @@ async def load_dev_cache():
 async def get_library_videos():
     """Returns recorded videos with both local path and preview URL."""
     # Ensure the folder exists
-    os.makedirs("recordings", exist_ok=True)
+    os.makedirs(RECORDINGS_DIR, exist_ok=True)
 
     # Get all mp4 files in the folder
-    search_path = os.path.abspath(os.path.join("recordings", "*.mp4"))
+    search_path = os.path.abspath(os.path.join(RECORDINGS_DIR, "*.mp4"))
     video_files = glob.glob(search_path)
 
     # Sort by newest first
@@ -177,3 +182,8 @@ async def get_library_videos():
         )
 
     return {"videos": videos}
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8000)

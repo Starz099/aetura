@@ -38,6 +38,7 @@ pnpm-debug.log*
 # Ignore the build artifacts
 /src-tauri/target/
 /src-tauri/gen/
+/src-tauri/bin/
 
 # Ignore generated binaries
 *.rs.bk
@@ -60,6 +61,10 @@ recordings/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# PyInstaller build artifacts
+engine/build/
+engine/dist/
 
 # Playwright & AI specific
 /engine/playwright-report/
