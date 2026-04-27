@@ -26,6 +26,13 @@ fn validate_settings(request: &ExportRequest) -> Result<(), AppError> {
         )));
     }
 
+    if request.background.roundedness > filters::MAX_BACKGROUND_ROUNDEDNESS {
+        return Err(AppError::ValidationError(format!(
+            "Background roundedness must be between 0 and {}.",
+            filters::MAX_BACKGROUND_ROUNDEDNESS
+        )));
+    }
+
     if !filters::is_supported_background_preset(&request.background.preset_id) {
         return Err(AppError::ValidationError(format!(
             "Unsupported background preset '{}'.",

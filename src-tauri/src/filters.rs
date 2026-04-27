@@ -3,6 +3,14 @@ use crate::models::{ExportEffect, ExportResolution};
 use std::path::PathBuf;
 
 pub const MAX_BACKGROUND_PADDING: u32 = 64;
+pub const MAX_BACKGROUND_ROUNDEDNESS: u32 = 32;
+
+fn build_rounded_alpha_expression(radius: u32) -> String {
+    format!(
+        "255*clip({r}+0.5-sqrt(pow(max(abs(X-(W-1)/2)-(W/2-{r})\\,0)\\,2)+pow(max(abs(Y-(H-1)/2)-(H/2-{r})\\,0)\\,2))\\,0\\,1)",
+        r = radius
+    )
+}
 
 /// Build FFmpeg zoom expression from effects
 ///
@@ -48,20 +56,50 @@ pub fn build_background_filter_graph(
     output_width: u32,
     output_height: u32,
     padding: u32,
+    roundedness: u32,
 ) -> String {
     let clamped_padding = padding.min(MAX_BACKGROUND_PADDING);
+    let clamped_roundedness = roundedness.min(MAX_BACKGROUND_ROUNDEDNESS);
     let max_padding_x = (output_width / 2).saturating_sub(1);
     let max_padding_y = (output_height / 2).saturating_sub(1);
     let safe_padding = clamped_padding.min(max_padding_x).min(max_padding_y);
 
     let inner_width = (output_width.saturating_sub(safe_padding.saturating_mul(2))).max(2);
     let inner_height = (output_height.saturating_sub(safe_padding.saturating_mul(2))).max(2);
+    let max_roundedness_x = (inner_width / 2).saturating_sub(1);
+    let max_roundedness_y = (inner_height / 2).saturating_sub(1);
+    let safe_roundedness = clamped_roundedness
+        .min(max_roundedness_x)
+        .min(max_roundedness_y);
+
+    if safe_roundedness == 0 {
+        return format!(
+            "[0:v]split=2[base][zoomed];\
+             [zoomed]scale=w='iw*({z})':h='ih*({z})':eval=frame[scaled];\
+             [base][scaled]overlay=x='(W-w)/2':y='(H-h)/2'[zoomed_out];\
+             [zoomed_out]scale=w={iw}:h={ih}:force_original_aspect_ratio=increase,crop={iw}:{ih}[fg];\
+             [1:v]scale=w={ow}:h={oh}:force_original_aspect_ratio=increase,crop={ow}:{oh}[bg];\
+             [bg][fg]overlay=x={p}:y={p}:shortest=1[vout]",
+            z = zoom_expression,
+            iw = inner_width,
+            ih = inner_height,
+            ow = output_width,
+            oh = output_height,
+            p = safe_padding,
+        );
+    }
+
+    let alpha_expression = build_rounded_alpha_expression(safe_roundedness);
 
     format!(
         "[0:v]split=2[base][zoomed];\
          [zoomed]scale=w='iw*({z})':h='ih*({z})':eval=frame[scaled];\
          [base][scaled]overlay=x='(W-w)/2':y='(H-h)/2'[zoomed_out];\
-         [zoomed_out]scale=w={iw}:h={ih}:force_original_aspect_ratio=increase,crop={iw}:{ih}[fg];\
+         [zoomed_out]scale=w={iw}:h={ih}:force_original_aspect_ratio=increase,crop={iw}:{ih}[fg_base];\
+         [fg_base]split=2[fg_color][fg_alpha_src];\
+         [fg_color]format=rgba[fg_rgba];\
+         [fg_alpha_src]format=gray,geq=lum='{aexpr}'[fg_alpha];\
+         [fg_rgba][fg_alpha]alphamerge[fg];\
          [1:v]scale=w={ow}:h={oh}:force_original_aspect_ratio=increase,crop={ow}:{oh}[bg];\
          [bg][fg]overlay=x={p}:y={p}:shortest=1[vout]",
         z = zoom_expression,
@@ -69,7 +107,8 @@ pub fn build_background_filter_graph(
         ih = inner_height,
         ow = output_width,
         oh = output_height,
-        p = safe_padding
+        p = safe_padding,
+        aexpr = alpha_expression,
     )
 }
 

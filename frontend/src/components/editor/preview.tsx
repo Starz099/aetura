@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
 import { Button, Card, CardContent } from "@/components/ui";
-import { useEditorStore } from "@/store/useEditorStore";
+import {
+  MAX_BACKGROUND_PADDING,
+  MAX_BACKGROUND_ROUNDEDNESS,
+  MIN_BACKGROUND_PADDING,
+  MIN_BACKGROUND_ROUNDEDNESS,
+  useEditorStore,
+} from "@/store/useEditorStore";
 import { getBackgroundPreset } from "@/components/editor/tools/background/presets";
 
 interface EditorPreviewProps {
@@ -40,7 +46,16 @@ export function EditorPreview({
   const zoomScale = activeZoomEffect?.multiplier ?? 1;
   const backgroundPreset = getBackgroundPreset(backgroundSettings.presetId);
   const previewPadding = backgroundSettings.enabled
-    ? Math.min(Math.max(backgroundSettings.padding, 0), 64)
+    ? Math.min(
+        Math.max(backgroundSettings.padding, MIN_BACKGROUND_PADDING),
+        MAX_BACKGROUND_PADDING,
+      )
+    : 0;
+  const previewBorderRadius = backgroundSettings.enabled
+    ? Math.min(
+        Math.max(backgroundSettings.roundedness, MIN_BACKGROUND_ROUNDEDNESS),
+        MAX_BACKGROUND_ROUNDEDNESS,
+      )
     : 0;
   const backgroundImageUrl =
     backgroundSettings.enabled && backgroundPreset
@@ -128,7 +143,7 @@ export function EditorPreview({
   return (
     <Card className="min-h-0 flex-1">
       <CardContent className="flex h-full min-h-0 items-center justify-center p-2">
-        <div className="relative h-full w-full overflow-hidden rounded-md border-2 border-border/80 bg-muted/45 shadow-[0_3px_0_var(--shadow-soft)]">
+        <div className="relative h-full w-full overflow-hidden border-2 border-border/80 bg-muted/45 shadow-[0_3px_0_var(--shadow-soft)]">
           {previewUrl ? (
             <>
               {activeZoomEffect ? (
@@ -160,8 +175,9 @@ export function EditorPreview({
                       autoPlay={autoPlay}
                       playsInline
                       muted={isMuted}
-                      className="h-full w-full rounded-md bg-transparent object-cover object-center"
+                      className="h-full w-full bg-transparent object-cover object-center"
                       style={{
+                        borderRadius: `${previewBorderRadius}px`,
                         transform: `scale(${zoomScale})`,
                         transformOrigin: "center center",
                         transition: "transform 150ms ease-out",

@@ -21,6 +21,7 @@ pub fn sample_request() -> ExportRequest {
             enabled: false,
             preset_id: "aurora-1".to_string(),
             padding: 32,
+            roundedness: 16,
         },
         destination: ExportDestination::File,
         format: ExportFormat::Mp4,

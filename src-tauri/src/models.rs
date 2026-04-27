@@ -56,6 +56,9 @@ fn default_background_padding() -> u32 {
     32
 }
 
+fn default_background_roundedness() -> u32 {
+    16
+}
 /// Background settings applied during export.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +69,8 @@ pub struct ExportBackground {
     pub preset_id: String,
     #[serde(default = "default_background_padding")]
     pub padding: u32,
+    #[serde(default = "default_background_roundedness")]
+    pub roundedness: u32,
 }
 
 fn default_background() -> ExportBackground {
@@ -73,6 +78,7 @@ fn default_background() -> ExportBackground {
         enabled: default_background_enabled(),
         preset_id: default_background_preset_id(),
         padding: default_background_padding(),
+        roundedness: default_background_roundedness(),
     }
 }
 

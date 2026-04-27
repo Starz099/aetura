@@ -59,15 +59,35 @@ fn test_resolution_dimensions() {
 
 #[test]
 fn test_background_filter_graph_contains_expected_overlay() {
-    let graph = build_background_filter_graph("1.200000", 1920, 1080, 32);
+    let graph = build_background_filter_graph("1.200000", 1920, 1080, 32, 0);
     assert!(graph.contains("overlay=x=32:y=32"));
     assert!(graph.contains("[1:v]scale=w=1920:h=1080"));
 }
 
 #[test]
 fn test_background_filter_graph_clamps_padding() {
-    let graph = build_background_filter_graph("1.200000", 1920, 1080, MAX_BACKGROUND_PADDING + 20);
+    let graph =
+        build_background_filter_graph("1.200000", 1920, 1080, MAX_BACKGROUND_PADDING + 20, 0);
     assert!(graph.contains("overlay=x=64:y=64"));
+}
+
+#[test]
+fn test_background_filter_graph_with_roundedness_adds_alpha_masking() {
+    let graph = build_background_filter_graph("1.200000", 1920, 1080, 32, 16);
+    assert!(graph.contains("alphamerge"));
+    assert!(graph.contains("geq=lum='255*clip("));
+}
+
+#[test]
+fn test_background_filter_graph_clamps_roundedness() {
+    let graph = build_background_filter_graph(
+        "1.200000",
+        1920,
+        1080,
+        32,
+        MAX_BACKGROUND_ROUNDEDNESS + 100,
+    );
+    assert!(graph.contains("W/2-32"));
 }
 
 #[test]

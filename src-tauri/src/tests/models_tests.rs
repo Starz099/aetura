@@ -35,6 +35,7 @@ fn test_export_request_deserializes_camel_case_fields() {
     assert!(!request.background.enabled);
     assert_eq!(request.background.preset_id, "aurora-1");
     assert_eq!(request.background.padding, 32);
+    assert_eq!(request.background.roundedness, 16);
 }
 
 #[test]
@@ -46,7 +47,8 @@ fn test_export_request_deserializes_background_fields() {
         "background": {
             "enabled": true,
             "presetId": "ocean-1",
-            "padding": 12
+            "padding": 12,
+            "roundedness": 10
         }
     });
 
@@ -55,4 +57,5 @@ fn test_export_request_deserializes_background_fields() {
     assert!(request.background.enabled);
     assert_eq!(request.background.preset_id, "ocean-1");
     assert_eq!(request.background.padding, 12);
+    assert_eq!(request.background.roundedness, 10);
 }

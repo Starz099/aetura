@@ -67,3 +67,16 @@ fn test_validate_invalid_background_padding() {
         .message()
         .contains("Background padding must be between 0 and"));
 }
+
+#[test]
+fn test_validate_invalid_background_roundedness() {
+    let request = with_request(|request| {
+        request.background.enabled = true;
+        request.background.roundedness = filters::MAX_BACKGROUND_ROUNDEDNESS + 1;
+    });
+
+    let error = validate_request(&request).expect_err("expected validation error");
+    assert!(error
+        .message()
+        .contains("Background roundedness must be between 0 and"));
+}

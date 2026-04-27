@@ -127,6 +127,7 @@ async fn start_export(
             output_width,
             output_height,
             request.background.padding,
+            request.background.roundedness,
         )
     } else {
         filters::build_filter_graph(&zoom_expression)

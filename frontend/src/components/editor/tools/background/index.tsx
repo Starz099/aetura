@@ -11,8 +11,12 @@ import {
 import { useEditorStore } from "@/store/useEditorStore";
 import { BACKGROUND_PRESETS } from "./presets";
 
-const MIN_PADDING = 0;
-const MAX_PADDING = 64;
+import {
+  MIN_BACKGROUND_PADDING,
+  MIN_BACKGROUND_ROUNDEDNESS,
+  MAX_BACKGROUND_PADDING,
+  MAX_BACKGROUND_ROUNDEDNESS,
+} from "@/store/useEditorStore";
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);
@@ -61,33 +65,69 @@ export function BackgroundToolPanel() {
             ))}
           </div>
         </div>
+        <Separator />
 
-        <div className="space-y-2">
-          <Label htmlFor="background-padding-slider">
-            Padding ({Math.round(backgroundSettings.padding)}px)
-          </Label>
-          <input
-            id="background-padding-slider"
-            type="range"
-            min={MIN_PADDING}
-            max={MAX_PADDING}
-            step={1}
-            value={clamp(backgroundSettings.padding, MIN_PADDING, MAX_PADDING)}
-            onChange={(event) => {
-              updateBackgroundSettings({
-                enabled: true,
-                padding: clamp(
-                  Number(event.target.value),
-                  MIN_PADDING,
-                  MAX_PADDING,
-                ),
-              });
-            }}
-            className="h-2 w-full cursor-pointer appearance-none rounded-full bg-border/70"
-            aria-label="Background padding"
-          />
+        <div className="flex w-full gap-4">
+          <div className="space-y-2 flex-1">
+            <Label htmlFor="background-padding-slider">
+              Padding ({Math.round(backgroundSettings.padding)}px)
+            </Label>
+            <input
+              id="background-padding-slider"
+              type="range"
+              min={MIN_BACKGROUND_PADDING}
+              max={MAX_BACKGROUND_PADDING}
+              step={1}
+              value={clamp(
+                backgroundSettings.padding,
+                MIN_BACKGROUND_PADDING,
+                MAX_BACKGROUND_PADDING,
+              )}
+              onChange={(event) => {
+                updateBackgroundSettings({
+                  enabled: true,
+                  padding: clamp(
+                    Number(event.target.value),
+                    MIN_BACKGROUND_PADDING,
+                    MAX_BACKGROUND_PADDING,
+                  ),
+                });
+              }}
+              className="h-2 w-full cursor-pointer appearance-none rounded-full bg-border/70"
+              aria-label="Background padding"
+            />
+          </div>
+
+          <div className="space-y-2 flex-1">
+            <Label htmlFor="background-roundedness-slider">
+              Roundedness ({Math.round(backgroundSettings.roundedness)}px)
+            </Label>
+            <input
+              id="background-roundedness-slider"
+              type="range"
+              min={MIN_BACKGROUND_ROUNDEDNESS}
+              max={MAX_BACKGROUND_ROUNDEDNESS}
+              step={1}
+              value={clamp(
+                backgroundSettings.roundedness,
+                MIN_BACKGROUND_ROUNDEDNESS,
+                MAX_BACKGROUND_ROUNDEDNESS,
+              )}
+              onChange={(event) => {
+                updateBackgroundSettings({
+                  enabled: true,
+                  roundedness: clamp(
+                    Number(event.target.value),
+                    MIN_BACKGROUND_ROUNDEDNESS,
+                    MAX_BACKGROUND_ROUNDEDNESS,
+                  ),
+                });
+              }}
+              className="h-2 w-full cursor-pointer appearance-none rounded-full bg-border/70"
+              aria-label="Background roundedness"
+            />
+          </div>
         </div>
-
         <Separator />
 
         <div className="flex flex-wrap gap-2">

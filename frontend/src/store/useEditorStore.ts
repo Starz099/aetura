@@ -21,6 +21,7 @@ export interface EditorBackgroundSettings {
   enabled: boolean;
   presetId: string;
   padding: number;
+  roundedness: number;
 }
 
 export type ExportDestination = "file";
@@ -56,16 +57,21 @@ const defaultExportSettings: ExportSettings = {
   optimizeFileSize: false,
 };
 
-const DEFAULT_ZOOM_LENGTH = 3;
-const DEFAULT_ZOOM_MULTIPLIER = 1.25;
-const DEFAULT_BACKGROUND_PRESET_ID = "aurora-1";
-const DEFAULT_BACKGROUND_PADDING = 32;
-const MAX_BACKGROUND_PADDING = 64;
+export const DEFAULT_ZOOM_LENGTH = 3;
+export const DEFAULT_ZOOM_MULTIPLIER = 1.25;
+export const DEFAULT_BACKGROUND_PRESET_ID = "aurora-1";
+export const DEFAULT_BACKGROUND_PADDING = 32;
+export const DEFAULT_BACKGROUND_ROUNDEDNESS = 16;
+export const MAX_BACKGROUND_ROUNDEDNESS = 32;
+export const MAX_BACKGROUND_PADDING = 64;
+export const MIN_BACKGROUND_PADDING = 0;
+export const MIN_BACKGROUND_ROUNDEDNESS = 0;
 
 const defaultBackgroundSettings: EditorBackgroundSettings = {
   enabled: false,
   presetId: DEFAULT_BACKGROUND_PRESET_ID,
   padding: DEFAULT_BACKGROUND_PADDING,
+  roundedness: DEFAULT_BACKGROUND_ROUNDEDNESS,
 };
 
 const createEffectId = () =>
@@ -119,12 +125,21 @@ const clampPaddingValue = (value: number) => {
   return Math.min(Math.max(value, 0), MAX_BACKGROUND_PADDING);
 };
 
+const clampRoundednessValue = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.min(Math.max(value, 0), MAX_BACKGROUND_ROUNDEDNESS);
+};
+
 const normalizeBackgroundSettings = (
   settings: EditorBackgroundSettings,
 ): EditorBackgroundSettings => ({
   enabled: Boolean(settings.enabled),
   presetId: settings.presetId.trim() || DEFAULT_BACKGROUND_PRESET_ID,
   padding: clampPaddingValue(settings.padding),
+  roundedness: clampRoundednessValue(settings.roundedness),
 });
 
 const clampEffect = (effect: EditorEffect, duration: number): EditorEffect => {
