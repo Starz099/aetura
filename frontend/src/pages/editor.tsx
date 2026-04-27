@@ -24,7 +24,11 @@ import { useExport } from "@/services/export";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 
-const effectTools = ["Zoom", "Background"];
+const editorTools = [
+  { label: "Cut", action: "cut" },
+  { label: "Zoom", action: "zoom" },
+  { label: "Background", action: "background" },
+] as const;
 const selectedOptionClass =
   "!border-primary/60 !bg-primary/10 !text-primary shadow-[0_2px_0_var(--shadow-soft)]";
 
@@ -72,7 +76,10 @@ const EditorPage = () => {
   const backgroundSettings = useEditorStore(
     (state) => state.backgroundSettings,
   );
-  const duration = useEditorStore((state) => state.duration);
+  const sourceDuration = useEditorStore((state) => state.sourceDuration);
+  const cutSelectedClipAtCurrentTime = useEditorStore(
+    (state) => state.cutSelectedClipAtCurrentTime,
+  );
   const defaultExportDirectory = useSettingsStore(
     (state) => state.defaultExportDirectory,
   );
@@ -112,7 +119,7 @@ const EditorPage = () => {
     setCopied(false);
     const exportRequest = buildExportRequest(
       previewUrl,
-      duration,
+      sourceDuration,
       effects,
       backgroundSettings,
       {
@@ -507,24 +514,29 @@ const EditorPage = () => {
             <Separator className="my-0.5" />
 
             <div className="grid gap-2">
-              {effectTools.map((tool) => (
+              {editorTools.map((tool) => (
                 <Button
-                  key={tool}
+                  key={tool.label}
                   variant="outline"
                   className="h-10 w-12 px-0 text-[10px]"
-                  title={tool}
+                  title={tool.label}
                   onClick={() => {
-                    if (tool === "Zoom") {
+                    if (tool.action === "cut") {
+                      cutSelectedClipAtCurrentTime();
+                      return;
+                    }
+
+                    if (tool.action === "zoom") {
                       addZoomEffect();
                       return;
                     }
 
-                    if (tool === "Background") {
+                    if (tool.action === "background") {
                       setShowBackgroundSettings(true);
                     }
                   }}
                 >
-                  {tool}
+                  {tool.label}
                 </Button>
               ))}
             </div>

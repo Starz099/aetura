@@ -4,52 +4,72 @@
  */
 
 import { useCallback, useMemo } from "react";
-import { useEditorStore } from "@/store/useEditorStore";
+
 import { formatTime } from "@/lib/time";
+import { findClipAtTimelineTime } from "@/lib/editorTimeline";
+import { useEditorStore } from "@/store/useEditorStore";
 
 /**
  * Hook providing core editor state and actions.
  */
 export function useEditor() {
-  // State
   const isPlaying = useEditorStore((state) => state.isPlaying);
   const currentTime = useEditorStore((state) => state.currentTime);
   const duration = useEditorStore((state) => state.duration);
+  const sourceDuration = useEditorStore((state) => state.sourceDuration);
   const selectedEffectId = useEditorStore((state) => state.selectedEffectId);
+  const selectedClipId = useEditorStore((state) => state.selectedClipId);
   const effects = useEditorStore((state) => state.effects);
+  const clips = useEditorStore((state) => state.clips);
 
-  // Store actions
   const setIsPlaying = useEditorStore((state) => state.setIsPlaying);
   const setCurrentTime = useEditorStore((state) => state.setCurrentTime);
   const setDuration = useEditorStore((state) => state.setDuration);
+  const initializeTimeline = useEditorStore(
+    (state) => state.initializeTimeline,
+  );
   const seekTo = useEditorStore((state) => state.seekTo);
   const togglePlay = useEditorStore((state) => state.togglePlay);
   const selectEffect = useEditorStore((state) => state.selectEffect);
+  const selectClip = useEditorStore((state) => state.selectClip);
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
   const updateEffect = useEditorStore((state) => state.updateEffect);
   const removeEffect = useEditorStore((state) => state.removeEffect);
+  const cutSelectedClipAtCurrentTime = useEditorStore(
+    (state) => state.cutSelectedClipAtCurrentTime,
+  );
+  const trimClipStart = useEditorStore((state) => state.trimClipStart);
+  const trimClipEnd = useEditorStore((state) => state.trimClipEnd);
   const resetTimeline = useEditorStore((state) => state.resetTimeline);
 
-  // Convenience actions
   const play = useCallback(() => setIsPlaying(true), [setIsPlaying]);
   const pause = useCallback(() => setIsPlaying(false), [setIsPlaying]);
   const seek = useCallback((time: number) => seekTo(time), [seekTo]);
 
-  // Computed values
   const progress = useMemo(() => {
     return duration > 0 ? (currentTime / duration) * 100 : 0;
   }, [currentTime, duration]);
 
   const isEditing = useMemo(() => {
-    return selectedEffectId !== null;
-  }, [selectedEffectId]);
+    return selectedEffectId !== null || selectedClipId !== null;
+  }, [selectedClipId, selectedEffectId]);
 
   const selectedEffect = useMemo(() => {
     if (!selectedEffectId) return null;
-    return effects.find((e) => e.id === selectedEffectId) || null;
+    return effects.find((effect) => effect.id === selectedEffectId) || null;
   }, [selectedEffectId, effects]);
 
-  // Wrapped actions
+  const selectedClip = useMemo(() => {
+    if (!selectedClipId) return null;
+
+    return clips.find((clip) => clip.id === selectedClipId) || null;
+  }, [clips, selectedClipId]);
+
+  const activeClip = useMemo(
+    () => findClipAtTimelineTime(clips, currentTime)?.clip ?? null,
+    [clips, currentTime],
+  );
+
   const togglePlayPause = useCallback(() => {
     togglePlay();
   }, [togglePlay]);
@@ -63,27 +83,34 @@ export function useEditor() {
   );
 
   return {
-    // State
     isPlaying,
     currentTime,
     duration,
+    sourceDuration,
     progress,
     effects,
+    clips,
     selectedEffectId,
+    selectedClipId,
     selectedEffect,
+    selectedClip,
+    activeClip,
     isEditing,
-    // Core actions
     setIsPlaying,
     setCurrentTime,
     setDuration,
+    initializeTimeline,
     seekTo,
     togglePlay,
     selectEffect,
+    selectClip,
     addZoomEffect,
     updateEffect,
     removeEffect,
+    cutSelectedClipAtCurrentTime,
+    trimClipStart,
+    trimClipEnd,
     resetTimeline,
-    // Convenience actions
     play,
     pause,
     seek,
@@ -103,7 +130,6 @@ export function useEditorPlayback() {
   const seekTo = useEditorStore((state) => state.seekTo);
   const togglePlay = useEditorStore((state) => state.togglePlay);
 
-  // Convenience actions
   const play = useCallback(() => setIsPlaying(true), [setIsPlaying]);
   const pause = useCallback(() => setIsPlaying(false), [setIsPlaying]);
   const seek = useCallback((time: number) => seekTo(time), [seekTo]);
@@ -145,12 +171,10 @@ export function useEditorEffects() {
 
   const selectedEffect = useMemo(() => {
     if (!selectedEffectId) return null;
-    return effects.find((e) => e.id === selectedEffectId) || null;
+    return effects.find((effect) => effect.id === selectedEffectId) || null;
   }, [selectedEffectId, effects]);
 
-  const hasEffects = useMemo(() => {
-    return effects.length > 0;
-  }, [effects]);
+  const hasEffects = useMemo(() => effects.length > 0, [effects]);
 
   return {
     effects,
