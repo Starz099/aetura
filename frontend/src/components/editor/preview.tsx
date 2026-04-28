@@ -192,10 +192,14 @@ export function EditorPreview({
                         transition: "transform 150ms ease-out",
                       }}
                       onLoadedMetadata={(event) => {
-                        initializeTimeline(
-                          previewUrl ?? event.currentTarget.currentSrc,
-                          event.currentTarget.duration,
-                        );
+                        // Keep the thumbnail/export preview read-only so it does not
+                        // reset the editor timeline back to a single clip.
+                        if (!thumbnailMode) {
+                          initializeTimeline(
+                            previewUrl ?? event.currentTarget.currentSrc,
+                            event.currentTarget.duration,
+                          );
+                        }
 
                         if (thumbnailMode) {
                           event.currentTarget.currentTime = 0;
@@ -237,7 +241,13 @@ export function EditorPreview({
 
                         if (nextClip) {
                           lastTimelinePushMsRef.current = now;
-                          video.currentTime = nextClip.clip.sourceStart;
+
+                          if (typeof video.fastSeek === "function") {
+                            video.fastSeek(nextClip.clip.sourceStart);
+                          } else {
+                            video.currentTime = nextClip.clip.sourceStart;
+                          }
+
                           setCurrentTime(nextClip.clip.timelineStart);
                           return;
                         }

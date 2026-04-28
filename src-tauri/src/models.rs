@@ -97,13 +97,27 @@ pub struct ExportEffect {
     pub multiplier: f64,
 }
 
+/// Represents a single video segment/clip to export
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportSegment {
+    /// Path to source video file
+    pub source_url: String,
+    /// Start time in source video (in seconds)
+    pub in_point: f64,
+    /// End time in source video (in seconds)
+    pub out_point: f64,
+    /// Start time in timeline/output (in seconds)
+    pub start_on_timeline: f64,
+}
+
 /// Request to export a video with effects
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportRequest {
-    /// Path to source video file
-    pub source: String,
-    /// Total duration of video in seconds
+    /// Video segments to concatenate and export
+    pub segments: Vec<ExportSegment>,
+    /// Total duration of concatenated video in seconds (used for progress calculation)
     pub duration: f64,
     /// List of effects to apply
     pub effects: Vec<ExportEffect>,

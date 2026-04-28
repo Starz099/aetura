@@ -49,7 +49,12 @@ export interface ExportSettings {
 }
 
 export interface ExportRequest {
-  source: string;
+  segments: Array<{
+    sourceUrl: string;
+    inPoint: number;
+    outPoint: number;
+    startOnTimeline: number;
+  }>;
   duration: number;
   effects: ExportEffect[];
   background: EditorBackgroundSettings;
@@ -405,6 +410,7 @@ const trimClipEndAt = (
 
 export const buildExportRequest = (
   source: string,
+  clips: EditorClip[],
   duration: number,
   effects: EditorEffect[],
   background: EditorBackgroundSettings,
@@ -427,8 +433,16 @@ export const buildExportRequest = (
       multiplier: effect.multiplier,
     }));
 
+  // Build segments from clips
+  const segments = clips.map((clip) => ({
+    sourceUrl: source,
+    inPoint: clip.sourceStart,
+    outPoint: clip.sourceEnd,
+    startOnTimeline: clip.timelineStart,
+  }));
+
   return {
-    source,
+    segments,
     duration: safeDuration,
     effects: normalizedEffects,
     background: normalizedBackground,

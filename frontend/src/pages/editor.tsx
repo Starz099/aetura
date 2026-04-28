@@ -76,7 +76,9 @@ const EditorPage = () => {
   const backgroundSettings = useEditorStore(
     (state) => state.backgroundSettings,
   );
-  const sourceDuration = useEditorStore((state) => state.sourceDuration);
+  const duration = useEditorStore((state) => state.duration);
+  const clips = useEditorStore((state) => state.clips);
+  const sourceUrl = useEditorStore((state) => state.sourceUrl);
   const cutSelectedClipAtCurrentTime = useEditorStore(
     (state) => state.cutSelectedClipAtCurrentTime,
   );
@@ -111,15 +113,34 @@ const EditorPage = () => {
   }, [recordingUrl]);
 
   const onExport = async () => {
-    if (!previewUrl) {
+    if (!previewUrl || !sourceUrl) {
       alert("No source video loaded.");
       return;
     }
 
     setCopied(false);
+
+    // Log clip data for debugging
+    console.group("EXPORT DEBUG");
+    console.log("Source URL:", sourceUrl);
+    console.log("Timeline Duration:", duration, "seconds");
+    console.log(`Number of Clips: ${clips.length}`);
+
+    if (clips.length === 0) {
+      console.warn("WARNING: No clips in timeline! Export may fail.");
+    }
+
+    clips.forEach((clip, idx) => {
+      const clipDuration = clip.sourceEnd - clip.sourceStart;
+      console.log(
+        `  Clip ${idx}: [${clip.sourceStart.toFixed(2)}s - ${clip.sourceEnd.toFixed(2)}s] (duration: ${clipDuration.toFixed(2)}s) @ timeline ${clip.timelineStart.toFixed(2)}s`,
+      );
+    });
+
     const exportRequest = buildExportRequest(
-      previewUrl,
-      sourceDuration,
+      sourceUrl,
+      clips,
+      duration,
       effects,
       backgroundSettings,
       {
@@ -128,6 +149,17 @@ const EditorPage = () => {
         fps: selectedFps,
       },
     );
+
+    console.log(`Export Request:`);
+    console.log(` - Total Duration: ${exportRequest.duration}s`);
+    console.log(` - Segments Count: ${exportRequest.segments.length}`);
+    exportRequest.segments.forEach((seg, idx) => {
+      const segDuration = seg.outPoint - seg.inPoint;
+      console.log(
+        `    Segment ${idx}: [${seg.inPoint.toFixed(2)}s - ${seg.outPoint.toFixed(2)}s] (duration: ${segDuration.toFixed(2)}s)`,
+      );
+    });
+    console.groupEnd();
 
     // Intentionally do not await here to avoid losing immediate processing UI
     // in environments where invoke timing can resolve unexpectedly early.

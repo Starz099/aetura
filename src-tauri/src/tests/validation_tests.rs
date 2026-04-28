@@ -2,13 +2,15 @@ use super::*;
 use crate::tests::helpers::with_request;
 
 #[test]
-fn test_validate_empty_source() {
+fn test_validate_empty_segments() {
     let request = with_request(|request| {
-        request.source.clear();
+        request.segments.clear();
     });
 
     let error = validate_request(&request).expect_err("expected validation error");
-    assert!(error.message().contains("Source video is missing"));
+    assert!(error
+        .message()
+        .contains("At least one segment is required"));
 }
 
 #[test]

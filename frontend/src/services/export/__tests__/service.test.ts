@@ -13,13 +13,26 @@ describe("exportService", () => {
     mockedInvoke.mockReset();
   });
 
-  it("sends the source field expected by the Tauri command", async () => {
+  it("sends segments to the Tauri command", async () => {
     mockedInvoke.mockResolvedValue({ outputPath: "/tmp/output.mp4" });
 
     const result = await exportService.export({
-      source: "/tmp/input.mp4",
-      duration: 12,
+      segments: [
+        {
+          sourceUrl: "/tmp/input.mp4",
+          inPoint: 0,
+          outPoint: 10,
+          startOnTimeline: 0,
+        },
+      ],
+      duration: 10,
       effects: [],
+      background: {
+        enabled: false,
+        presetId: "aurora-1",
+        padding: 32,
+        roundedness: 16,
+      },
       format: "mp4",
       resolution: "1080p",
       fps: 30,
@@ -29,9 +42,22 @@ describe("exportService", () => {
 
     expect(mockedInvoke).toHaveBeenCalledWith("start_export", {
       request: {
-        source: "/tmp/input.mp4",
-        duration: 12,
+        segments: [
+          {
+            sourceUrl: "/tmp/input.mp4",
+            inPoint: 0,
+            outPoint: 10,
+            startOnTimeline: 0,
+          },
+        ],
+        duration: 10,
         effects: [],
+        background: {
+          enabled: false,
+          presetId: "aurora-1",
+          padding: 32,
+          roundedness: 16,
+        },
         format: "mp4",
         resolution: "1080p",
         fps: 30,
@@ -50,15 +76,21 @@ describe("exportService", () => {
   it("rejects invalid export requests before invoking Tauri", async () => {
     await expect(
       exportService.export({
-        source: "",
+        segments: [],
         duration: 12,
         effects: [],
+        background: {
+          enabled: false,
+          presetId: "aurora-1",
+          padding: 32,
+          roundedness: 16,
+        },
         format: "mp4",
         resolution: "1080p",
         fps: 30,
         optimizeFileSize: false,
       }),
-    ).rejects.toThrow("Source is required");
+    ).rejects.toThrow("At least one segment is required");
 
     expect(mockedInvoke).not.toHaveBeenCalled();
   });
@@ -67,9 +99,22 @@ describe("exportService", () => {
     mockedInvoke.mockRejectedValue(new Error("ffmpeg failed"));
 
     const result = await exportService.export({
-      source: "/tmp/input.mp4",
-      duration: 12,
+      segments: [
+        {
+          sourceUrl: "/tmp/input.mp4",
+          inPoint: 0,
+          outPoint: 10,
+          startOnTimeline: 0,
+        },
+      ],
+      duration: 10,
       effects: [],
+      background: {
+        enabled: false,
+        presetId: "aurora-1",
+        padding: 32,
+        roundedness: 16,
+      },
       format: "mp4",
       resolution: "1080p",
       fps: 30,

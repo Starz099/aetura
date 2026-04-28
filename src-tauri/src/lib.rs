@@ -91,8 +91,9 @@ async fn start_export(
         models::ExportFormat::Mp4 => "mp4",
     };
     let settings_suffix = format!("{}-{}fps", resolution_tag(&request.resolution), request.fps);
+    let first_source = request.segments.first().map(|s| s.source_url.as_str()).unwrap_or("video");
     let default_filename =
-        dialogs::derive_default_filename(&request.source, &settings_suffix, format_extension);
+        dialogs::derive_default_filename(first_source, &settings_suffix, format_extension);
     let _destination_mode = match request.destination {
         models::ExportDestination::File => "file",
         models::ExportDestination::Clipboard => "clipboard",
