@@ -133,7 +133,7 @@ export function useExport() {
 
       try {
         const result = await exportService.export({
-          source: request.source,
+          segments: request.segments,
           duration: request.duration,
           effects: request.effects,
           background: request.background,

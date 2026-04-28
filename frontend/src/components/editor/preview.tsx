@@ -2,13 +2,19 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button, Card, CardContent } from "@/components/ui";
 import {
+  findClipAtSourceTime,
+  findNextClipAfterSourceTime,
+  mapTimelineTimeToSourceTime,
+  TIMELINE_TIME_UPDATE_THROTTLE_MS,
+} from "@/lib/editorTimeline";
+import { getBackgroundPreset } from "@/components/editor/tools/background/presets";
+import {
   MAX_BACKGROUND_PADDING,
   MAX_BACKGROUND_ROUNDEDNESS,
   MIN_BACKGROUND_PADDING,
   MIN_BACKGROUND_ROUNDEDNESS,
   useEditorStore,
 } from "@/store/useEditorStore";
-import { getBackgroundPreset } from "@/components/editor/tools/background/presets";
 
 interface EditorPreviewProps {
   previewUrl: string | null;
@@ -28,6 +34,7 @@ export function EditorPreview({
   const [isMuted, setIsMuted] = useState(true);
   const currentTime = useEditorStore((state) => state.currentTime);
   const isPlaying = useEditorStore((state) => state.isPlaying);
+  const clips = useEditorStore((state) => state.clips);
   const activeZoomEffect = useEditorStore(
     (state) =>
       state.effects.find(
@@ -37,8 +44,10 @@ export function EditorPreview({
           currentTime <= effect.startTime + effect.length,
       ) ?? null,
   );
+  const initializeTimeline = useEditorStore(
+    (state) => state.initializeTimeline,
+  );
   const setCurrentTime = useEditorStore((state) => state.setCurrentTime);
-  const setDuration = useEditorStore((state) => state.setDuration);
   const setIsPlaying = useEditorStore((state) => state.setIsPlaying);
   const backgroundSettings = useEditorStore(
     (state) => state.backgroundSettings,
@@ -74,11 +83,12 @@ export function EditorPreview({
     }
 
     const seekThreshold = isPlaying ? 0.25 : 0.05;
+    const mappedSourceTime = mapTimelineTimeToSourceTime(clips, currentTime);
 
-    if (Math.abs(video.currentTime - currentTime) > seekThreshold) {
-      video.currentTime = currentTime;
+    if (Math.abs(video.currentTime - mappedSourceTime) > seekThreshold) {
+      video.currentTime = mappedSourceTime;
     }
-  }, [autoPlay, thumbnailMode, isPlaying, currentTime]);
+  }, [autoPlay, clips, currentTime, isPlaying, thumbnailMode]);
 
   useEffect(() => {
     if (thumbnailMode) {
@@ -116,7 +126,6 @@ export function EditorPreview({
       return;
     }
 
-    // Ensure export preview always starts playing when opened.
     video.currentTime = 0;
     void video.play().catch(() => {
       // Ignore autoplay interruptions; user can still unmute/play manually.
@@ -183,23 +192,78 @@ export function EditorPreview({
                         transition: "transform 150ms ease-out",
                       }}
                       onLoadedMetadata={(event) => {
-                        setDuration(event.currentTarget.duration);
+                        // Keep the thumbnail/export preview read-only so it does not
+                        // reset the editor timeline back to a single clip.
+                        if (!thumbnailMode) {
+                          initializeTimeline(
+                            previewUrl ?? event.currentTarget.currentSrc,
+                            event.currentTarget.duration,
+                          );
+                        }
+
                         if (thumbnailMode) {
                           event.currentTarget.currentTime = 0;
                         }
                       }}
                       onTimeUpdate={(event) => {
-                        const nextTime = event.currentTarget.currentTime;
+                        const video = event.currentTarget;
                         const now = performance.now();
 
-                        // Avoid flooding global state updates while keeping timeline smooth.
-                        if (now - lastTimelinePushMsRef.current < 75) {
+                        if (
+                          now - lastTimelinePushMsRef.current <
+                          TIMELINE_TIME_UPDATE_THROTTLE_MS
+                        ) {
                           return;
                         }
 
-                        if (Math.abs(nextTime - currentTime) > 0.01) {
+                        const timelineMatch = findClipAtSourceTime(
+                          clips,
+                          video.currentTime,
+                        );
+
+                        if (timelineMatch) {
+                          const nextTime =
+                            timelineMatch.clip.timelineStart +
+                            timelineMatch.localTime;
+
+                          if (Math.abs(nextTime - currentTime) > 0.01) {
+                            lastTimelinePushMsRef.current = now;
+                            setCurrentTime(nextTime);
+                          }
+
+                          return;
+                        }
+
+                        const nextClip = findNextClipAfterSourceTime(
+                          clips,
+                          video.currentTime,
+                        );
+
+                        if (nextClip) {
                           lastTimelinePushMsRef.current = now;
-                          setCurrentTime(nextTime);
+
+                          if (typeof video.fastSeek === "function") {
+                            video.fastSeek(nextClip.clip.sourceStart);
+                          } else {
+                            video.currentTime = nextClip.clip.sourceStart;
+                          }
+
+                          setCurrentTime(nextClip.clip.timelineStart);
+                          return;
+                        }
+
+                        if (clips.length > 0) {
+                          const lastClip = clips[clips.length - 1];
+
+                          if (video.currentTime >= lastClip.sourceEnd) {
+                            lastTimelinePushMsRef.current = now;
+                            video.pause();
+                            setCurrentTime(
+                              lastClip.timelineStart +
+                                (lastClip.sourceEnd - lastClip.sourceStart),
+                            );
+                            setIsPlaying(false);
+                          }
                         }
                       }}
                       onPlay={() => setIsPlaying(true)}

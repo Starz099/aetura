@@ -1,6 +1,6 @@
 use crate::models::{
     ExportBackground, ExportDestination, ExportEffect, ExportFormat, ExportRequest,
-    ExportResolution,
+    ExportResolution, ExportSegment,
 };
 
 pub fn sample_effect() -> ExportEffect {
@@ -12,9 +12,18 @@ pub fn sample_effect() -> ExportEffect {
     }
 }
 
+pub fn sample_segment() -> ExportSegment {
+    ExportSegment {
+        source_url: "input.mp4".to_string(),
+        in_point: 0.0,
+        out_point: 10.0,
+        start_on_timeline: 0.0,
+    }
+}
+
 pub fn sample_request() -> ExportRequest {
     ExportRequest {
-        source: "input.mp4".to_string(),
+        segments: vec![sample_segment()],
         duration: 10.0,
         effects: vec![sample_effect()],
         background: ExportBackground {

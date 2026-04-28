@@ -12,19 +12,25 @@ fn build_ffmpeg_args(
     filter_graph: &str,
     background_input: Option<&str>,
     output: &str,
+    has_audio: bool,
 ) -> Vec<String> {
+    eprintln!("=== BUILD_FFMPEG_ARGS DEBUG ===");
+    eprintln!("Segments count: {}", request.segments.len());
+    
     let resolution_filter = match request.resolution {
         ExportResolution::P720 => "scale=1280:-2",
         ExportResolution::P1080 => "scale=1920:-2",
         ExportResolution::P4k => "scale=3840:-2",
     };
     let fps_filter = format!("fps={}", request.fps);
+    let source_label = "[vconcat]";
+    let video_filter_graph = filter_graph.replace("[0:v]", source_label);
     let tuned_video_chain = if request.background.enabled {
-        format!("{};[vout]{}[vfinal]", filter_graph, fps_filter)
+        format!("{};[vout]{}[vfinal]", video_filter_graph, fps_filter)
     } else {
         format!(
             "{};[vout]{},{}[vfinal]",
-            filter_graph, fps_filter, resolution_filter
+            video_filter_graph, fps_filter, resolution_filter
         )
     };
 
@@ -34,6 +40,7 @@ fn build_ffmpeg_args(
         "medium"
     };
     let video_crf = "23";
+    let is_single_segment = request.segments.len() == 1;
 
     let mut args = vec![
         "-hide_banner".to_string(),
@@ -42,8 +49,60 @@ fn build_ffmpeg_args(
         "pipe:2".to_string(),
         "-y".to_string(),
         "-i".to_string(),
-        request.source.clone(),
+        request.segments[0].source_url.clone(),
     ];
+
+    let mut filter_parts: Vec<String> = Vec::new();
+    let mut concat_inputs = Vec::with_capacity(request.segments.len());
+
+    for (idx, segment) in request.segments.iter().enumerate() {
+        eprintln!("Processing segment {}: in={}, out={}", idx, segment.in_point, segment.out_point);
+        
+        let video_trim = format!("vtrim{}", idx);
+        filter_parts.push(format!(
+            "[0:v]trim=start={}:end={}[{}];[{}]setpts=PTS-STARTPTS[v{}]",
+            segment.in_point, segment.out_point, video_trim, video_trim, idx
+        ));
+        concat_inputs.push(format!("[v{}]", idx));
+
+        if has_audio {
+            let audio_trim = format!("atrim{}", idx);
+            filter_parts.push(format!(
+                "[0:a]atrim=start={}:end={}[{}];[{}]asetpts=PTS-STARTPTS[a{}]",
+                segment.in_point, segment.out_point, audio_trim, audio_trim, idx
+            ));
+            concat_inputs[idx] = format!("[v{}][a{}]", idx, idx);
+        }
+    }
+
+    let (video_source_label, audio_output_label) = if is_single_segment {
+        let video_label = "[v0]".to_string();
+        let audio_label = if has_audio {
+            Some("[a0]".to_string())
+        } else {
+            None
+        };
+
+        (video_label, audio_label)
+    } else {
+        let concat_stream_count = if has_audio { "v=1:a=1" } else { "v=1:a=0" };
+        filter_parts.push(format!(
+            "{}concat=n={}:{}[vconcat]{}",
+            concat_inputs.join(""),
+            request.segments.len(),
+            concat_stream_count,
+            if has_audio { "[aconcat]" } else { "" }
+        ));
+
+        (
+            "[vconcat]".to_string(),
+            if has_audio {
+                Some("[aconcat]".to_string())
+            } else {
+                None
+            },
+        )
+    };
 
     if let Some(path) = background_input {
         args.extend_from_slice(&[
@@ -54,9 +113,21 @@ fn build_ffmpeg_args(
         ]);
     }
 
+    let filter_complex = if filter_parts.is_empty() {
+        tuned_video_chain.replace("[vconcat]", &video_source_label)
+    } else {
+        format!(
+            "{};{}",
+            filter_parts.join(";"),
+            tuned_video_chain.replace("[vconcat]", &video_source_label)
+        )
+    };
+
+    eprintln!("Generated filter_complex:\n{}", filter_complex);
+
     args.extend_from_slice(&[
         "-filter_complex".to_string(),
-        tuned_video_chain,
+        filter_complex,
         "-map".to_string(),
         "[vfinal]".to_string(),
     ]);
@@ -72,9 +143,20 @@ fn build_ffmpeg_args(
             ]);
         }
         ExportFormat::Mp4 => {
+            if let Some(audio_label) = audio_output_label {
+                args.extend_from_slice(&[
+                    "-map".to_string(),
+                    audio_label,
+                    "-c:a".to_string(),
+                    "aac".to_string(),
+                    "-b:a".to_string(),
+                    "192k".to_string(),
+                ]);
+            } else {
+                args.extend_from_slice(&["-an".to_string()]);
+            }
+
             args.extend_from_slice(&[
-                "-map".to_string(),
-                "0:a?".to_string(),
                 "-c:v".to_string(),
                 "libx264".to_string(),
                 "-preset".to_string(),
@@ -83,8 +165,6 @@ fn build_ffmpeg_args(
                 video_crf.to_string(),
                 "-pix_fmt".to_string(),
                 "yuv420p".to_string(),
-                "-c:a".to_string(),
-                "copy".to_string(),
             ]);
         }
     }
@@ -153,6 +233,49 @@ pub fn resolve_ffmpeg_binary() -> PathBuf {
     PathBuf::from("ffmpeg")
 }
 
+fn resolve_ffprobe_binary() -> PathBuf {
+    if let Ok(custom_path) = env::var("AETURA_FFPROBE_PATH") {
+        if !custom_path.trim().is_empty() {
+            return PathBuf::from(custom_path);
+        }
+    }
+
+    if let Ok(current_exe) = env::current_exe() {
+        if let Some(exe_dir) = current_exe.parent() {
+            let candidates = [exe_dir.join("ffprobe"), exe_dir.join("ffprobe.exe")];
+            for candidate in candidates {
+                if candidate.exists() {
+                    return candidate;
+                }
+            }
+        }
+    }
+
+    PathBuf::from("ffprobe")
+}
+
+fn probe_source_has_audio(source: &str) -> bool {
+    let ffprobe = resolve_ffprobe_binary();
+    let output = Command::new(&ffprobe)
+        .args([
+            "-v",
+            "error",
+            "-select_streams",
+            "a:0",
+            "-show_entries",
+            "stream=index",
+            "-of",
+            "csv=p=0",
+            source,
+        ])
+        .output();
+
+    match output {
+        Ok(result) => !String::from_utf8_lossy(&result.stdout).trim().is_empty(),
+        Err(_) => false,
+    }
+}
+
 /// Execute FFmpeg with the given arguments
 pub fn execute_ffmpeg(
     request: &ExportRequest,
@@ -162,8 +285,38 @@ pub fn execute_ffmpeg(
     mut on_progress: impl FnMut(f64),
     should_cancel: impl Fn() -> bool,
 ) -> Result<(), AppError> {
+    eprintln!("=== EXECUTE_FFMPEG DEBUG ===");
+    eprintln!("Number of segments: {}", request.segments.len());
+    for (idx, segment) in request.segments.iter().enumerate() {
+        eprintln!(
+            "  Segment {}: source={}, in_point={}, out_point={}, start_on_timeline={}",
+            idx, segment.source_url, segment.in_point, segment.out_point, segment.start_on_timeline
+        );
+    }
+    eprintln!("Export duration: {}", request.duration);
+    
     let ffmpeg = resolve_ffmpeg_binary();
-    let args = build_ffmpeg_args(request, filter_graph, background_input, output);
+    let has_audio = probe_source_has_audio(&request.segments[0].source_url);
+    eprintln!("Has audio: {}", has_audio);
+    
+    let args = build_ffmpeg_args(request, filter_graph, background_input, output, has_audio);
+
+    eprintln!("FFmpeg args (first 20):");
+    for (idx, arg) in args.iter().take(20).enumerate() {
+        eprintln!("  [{}]: {}", idx, arg);
+    }
+    if args.len() > 20 {
+        eprintln!("  ... and {} more args", args.len() - 20);
+    }
+    
+    // Find and print the filter_complex arg
+    for (idx, arg) in args.iter().enumerate() {
+        if arg == "-filter_complex" && idx + 1 < args.len() {
+            eprintln!("Filter complex:\n{}", args[idx + 1]);
+            break;
+        }
+    }
+    eprintln!("=== END DEBUG ===");
 
     let mut command = Command::new(&ffmpeg);
     command.args(&args);

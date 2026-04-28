@@ -5,10 +5,41 @@ use crate::models::{ExportEffect, ExportRequest};
 
 /// Validate an export request
 pub fn validate_request(request: &ExportRequest) -> Result<(), AppError> {
-    validate_source(&request.source)?;
+    validate_segments(&request.segments)?;
     validate_duration(request.duration)?;
     validate_effects(&request.effects, request.duration)?;
     validate_settings(request)?;
+    Ok(())
+}
+
+/// Validate video segments
+fn validate_segments(segments: &[crate::models::ExportSegment]) -> Result<(), AppError> {
+    if segments.is_empty() {
+        return Err(AppError::ValidationError(
+            "At least one segment is required.".to_string(),
+        ));
+    }
+
+    for (i, segment) in segments.iter().enumerate() {
+        if segment.source_url.trim().is_empty() {
+            return Err(AppError::ValidationError(
+                format!("Segment {} source URL is missing.", i + 1),
+            ));
+        }
+
+        if segment.in_point < 0.0 || segment.out_point < 0.0 {
+            return Err(AppError::ValidationError(
+                format!("Segment {} has invalid time points.", i + 1),
+            ));
+        }
+
+        if segment.in_point >= segment.out_point {
+            return Err(AppError::ValidationError(
+                format!("Segment {} in-point must be before out-point.", i + 1),
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -40,16 +71,6 @@ fn validate_settings(request: &ExportRequest) -> Result<(), AppError> {
         )));
     }
 
-    Ok(())
-}
-
-/// Validate source video path
-fn validate_source(source: &str) -> Result<(), AppError> {
-    if source.trim().is_empty() {
-        return Err(AppError::ValidationError(
-            "Source video is missing.".to_string(),
-        ));
-    }
     Ok(())
 }
 
