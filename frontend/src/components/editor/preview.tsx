@@ -11,6 +11,7 @@ import { getBackgroundPreset } from "@/components/editor/tools/background/preset
 import {
   MAX_BACKGROUND_PADDING,
   MAX_BACKGROUND_ROUNDEDNESS,
+  DEFAULT_ZOOM_ANCHOR,
   MIN_BACKGROUND_PADDING,
   MIN_BACKGROUND_ROUNDEDNESS,
   useEditorStore,
@@ -53,6 +54,7 @@ export function EditorPreview({
     (state) => state.backgroundSettings,
   );
   const zoomScale = activeZoomEffect?.multiplier ?? 1;
+  const zoomAnchor = activeZoomEffect?.anchor ?? DEFAULT_ZOOM_ANCHOR;
   const backgroundPreset = getBackgroundPreset(backgroundSettings.presetId);
   const previewPadding = backgroundSettings.enabled
     ? Math.min(
@@ -188,7 +190,7 @@ export function EditorPreview({
                       style={{
                         borderRadius: `${previewBorderRadius}px`,
                         transform: `scale(${zoomScale})`,
-                        transformOrigin: "center center",
+                        transformOrigin: `${zoomAnchor.x * 100}% ${zoomAnchor.y * 100}%`,
                         transition: "transform 150ms ease-out",
                       }}
                       onLoadedMetadata={(event) => {

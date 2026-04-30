@@ -35,6 +35,16 @@ fn test_validate_valid_request() {
 }
 
 #[test]
+fn test_validate_invalid_zoom_anchor() {
+    let request = with_request(|request| {
+        request.effects[0].anchor.x = 1.25;
+    });
+
+    let error = validate_request(&request).expect_err("expected validation error");
+    assert!(error.message().contains("Zoom anchor must be normalized"));
+}
+
+#[test]
 fn test_validate_invalid_fps() {
     let request = with_request(|request| {
         request.fps = 24;

@@ -119,6 +119,18 @@ fn validate_effect(effect: &ExportEffect, duration: f64) -> Result<(), AppError>
         ));
     }
 
+    if !effect.anchor.x.is_finite()
+        || !effect.anchor.y.is_finite()
+        || effect.anchor.x < 0.0
+        || effect.anchor.x > 1.0
+        || effect.anchor.y < 0.0
+        || effect.anchor.y > 1.0
+    {
+        return Err(AppError::ValidationError(
+            "Zoom anchor must be normalized between 0.0 and 1.0 on both axes.".to_string(),
+        ));
+    }
+
     if duration > 0.0 && (effect.start_time + effect.length > duration + 0.001) {
         return Err(AppError::ValidationError(
             "One or more effects exceed source duration.".to_string(),
