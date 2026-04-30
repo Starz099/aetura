@@ -44,6 +44,21 @@ fn default_optimize_file_size() -> bool {
     false
 }
 
+fn default_zoom_anchor_x() -> f64 {
+    0.5
+}
+
+fn default_zoom_anchor_y() -> f64 {
+    0.5
+}
+
+fn default_zoom_anchor() -> ZoomAnchor {
+    ZoomAnchor {
+        x: default_zoom_anchor_x(),
+        y: default_zoom_anchor_y(),
+    }
+}
+
 fn default_background_enabled() -> bool {
     false
 }
@@ -73,6 +88,16 @@ pub struct ExportBackground {
     pub roundedness: u32,
 }
 
+/// Normalized anchor position for a zoom effect.
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ZoomAnchor {
+    #[serde(default = "default_zoom_anchor_x")]
+    pub x: f64,
+    #[serde(default = "default_zoom_anchor_y")]
+    pub y: f64,
+}
+
 fn default_background() -> ExportBackground {
     ExportBackground {
         enabled: default_background_enabled(),
@@ -95,6 +120,9 @@ pub struct ExportEffect {
     pub length: f64,
     /// Zoom multiplier (for zoom effects)
     pub multiplier: f64,
+    /// Normalized zoom anchor position (0.0 to 1.0 on each axis)
+    #[serde(default = "default_zoom_anchor")]
+    pub anchor: ZoomAnchor,
 }
 
 /// Represents a single video segment/clip to export

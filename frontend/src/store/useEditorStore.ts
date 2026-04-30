@@ -13,12 +13,18 @@ import {
 
 export type EditorEffectType = "zoom";
 
+export interface ZoomAnchor {
+  x: number;
+  y: number;
+}
+
 export interface EditorEffect {
   id: string;
   type: EditorEffectType;
   startTime: number;
   length: number;
   multiplier: number;
+  anchor: ZoomAnchor;
 }
 
 export interface ExportEffect {
@@ -26,6 +32,7 @@ export interface ExportEffect {
   startTime: number;
   length: number;
   multiplier: number;
+  anchor: ZoomAnchor;
 }
 
 export interface EditorBackgroundSettings {
@@ -75,6 +82,10 @@ const defaultExportSettings: ExportSettings = {
 
 export const DEFAULT_ZOOM_LENGTH = 3;
 export const DEFAULT_ZOOM_MULTIPLIER = 1.25;
+export const DEFAULT_ZOOM_ANCHOR: ZoomAnchor = {
+  x: 0.5,
+  y: 0.5,
+};
 export const DEFAULT_BACKGROUND_PRESET_ID = "aurora-1";
 export const DEFAULT_BACKGROUND_PADDING = 32;
 export const DEFAULT_BACKGROUND_ROUNDEDNESS = 16;
@@ -155,6 +166,23 @@ const clampNonNegative = (value: number) => {
   return Math.max(value, 0);
 };
 
+const clampAnchorValue = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return 0.5;
+  }
+
+  return Math.min(Math.max(value, 0), 1);
+};
+
+const normalizeZoomAnchor = (anchor?: Partial<ZoomAnchor> | null): ZoomAnchor => ({
+  x: clampAnchorValue(anchor?.x ?? DEFAULT_ZOOM_ANCHOR.x),
+  y: clampAnchorValue(anchor?.y ?? DEFAULT_ZOOM_ANCHOR.y),
+});
+
+type EffectDraft = Omit<EditorEffect, "anchor"> & {
+  anchor?: Partial<ZoomAnchor> | null;
+};
+
 const clampPaddingValue = (value: number) => {
   if (!Number.isFinite(value)) {
     return 0;
@@ -180,7 +208,7 @@ const normalizeBackgroundSettings = (
   roundedness: clampRoundednessValue(settings.roundedness),
 });
 
-const clampEffect = (effect: EditorEffect, duration: number): EditorEffect => {
+const clampEffect = (effect: EffectDraft, duration: number): EditorEffect => {
   const safeDuration = Number.isFinite(duration) ? Math.max(duration, 0) : 0;
   let startTime = clampTime(effect.startTime, safeDuration);
   const requestedLength = Number.isFinite(effect.length)
@@ -205,6 +233,7 @@ const clampEffect = (effect: EditorEffect, duration: number): EditorEffect => {
             Math.max(safeDuration - startTime, MIN_EFFECT_LENGTH),
           )
         : length,
+    anchor: normalizeZoomAnchor(effect.anchor),
   };
 };
 
@@ -230,6 +259,7 @@ const createDefaultZoomEffect = (
       startTime: normalizedStart,
       length: defaultLength,
       multiplier: DEFAULT_ZOOM_MULTIPLIER,
+      anchor: DEFAULT_ZOOM_ANCHOR,
     },
     safeDuration,
   );
@@ -431,6 +461,7 @@ export const buildExportRequest = (
       startTime: effect.startTime,
       length: effect.length,
       multiplier: effect.multiplier,
+      anchor: effect.anchor,
     }));
 
   // Build segments from clips

@@ -35,11 +35,41 @@ pub fn build_zoom_expression(mut effects: Vec<ExportEffect>) -> String {
     expression
 }
 
+fn build_zoom_anchor_expression(mut effects: Vec<ExportEffect>, axis: AnchorAxis) -> String {
+    effects.sort_by(|a, b| a.start_time.total_cmp(&b.start_time));
+
+    effects
+        .into_iter()
+        .rev()
+        .fold("0.500000".to_string(), |fallback, effect| {
+            let anchor_value = match axis {
+                AnchorAxis::X => effect.anchor.x,
+                AnchorAxis::Y => effect.anchor.y,
+            };
+            let end_time = effect.start_time + effect.length;
+
+            format!(
+                "if(between(t,{:.6},{:.6}),{:.6},({}))",
+                effect.start_time, end_time, anchor_value, fallback
+            )
+        })
+}
+
+enum AnchorAxis {
+    X,
+    Y,
+}
+
 /// Build complete FFmpeg filter graph for zoom effects
-pub fn build_filter_graph(zoom_expression: &str) -> String {
+pub fn build_filter_graph(zoom_expression: &str, effects: &[ExportEffect]) -> String {
+    let anchor_x = build_zoom_anchor_expression(effects.to_vec(), AnchorAxis::X);
+    let anchor_y = build_zoom_anchor_expression(effects.to_vec(), AnchorAxis::Y);
+
     format!(
-        "[0:v]split=2[base][zoomed];[zoomed]scale=w='iw*({z})':h='ih*({z})':eval=frame[scaled];[base][scaled]overlay=x='(W-w)/2':y='(H-h)/2'[vout]",
-        z = zoom_expression
+        "[0:v]split=2[base][zoomed];[zoomed]scale=w='iw*({z})':h='ih*({z})':eval=frame[scaled];[base][scaled]overlay=x='(W-w)*({ax})':y='(H-h)*({ay})'[vout]",
+        z = zoom_expression,
+        ax = anchor_x,
+        ay = anchor_y,
     )
 }
 
@@ -57,6 +87,7 @@ pub fn build_background_filter_graph(
     output_height: u32,
     padding: u32,
     roundedness: u32,
+    effects: &[ExportEffect],
 ) -> String {
     let clamped_padding = padding.min(MAX_BACKGROUND_PADDING);
     let clamped_roundedness = roundedness.min(MAX_BACKGROUND_ROUNDEDNESS);
@@ -71,16 +102,20 @@ pub fn build_background_filter_graph(
     let safe_roundedness = clamped_roundedness
         .min(max_roundedness_x)
         .min(max_roundedness_y);
+    let anchor_x = build_zoom_anchor_expression(effects.to_vec(), AnchorAxis::X);
+    let anchor_y = build_zoom_anchor_expression(effects.to_vec(), AnchorAxis::Y);
 
     if safe_roundedness == 0 {
         return format!(
             "[0:v]split=2[base][zoomed];\
              [zoomed]scale=w='iw*({z})':h='ih*({z})':eval=frame[scaled];\
-             [base][scaled]overlay=x='(W-w)/2':y='(H-h)/2'[zoomed_out];\
+             [base][scaled]overlay=x='(W-w)*({ax})':y='(H-h)*({ay})'[zoomed_out];\
              [zoomed_out]scale=w={iw}:h={ih}:force_original_aspect_ratio=increase,crop={iw}:{ih}[fg];\
              [1:v]scale=w={ow}:h={oh}:force_original_aspect_ratio=increase,crop={ow}:{oh}[bg];\
              [bg][fg]overlay=x={p}:y={p}:shortest=1[vout]",
             z = zoom_expression,
+            ax = anchor_x,
+            ay = anchor_y,
             iw = inner_width,
             ih = inner_height,
             ow = output_width,
@@ -94,7 +129,7 @@ pub fn build_background_filter_graph(
     format!(
         "[0:v]split=2[base][zoomed];\
          [zoomed]scale=w='iw*({z})':h='ih*({z})':eval=frame[scaled];\
-         [base][scaled]overlay=x='(W-w)/2':y='(H-h)/2'[zoomed_out];\
+         [base][scaled]overlay=x='(W-w)*({ax})':y='(H-h)*({ay})'[zoomed_out];\
          [zoomed_out]scale=w={iw}:h={ih}:force_original_aspect_ratio=increase,crop={iw}:{ih}[fg_base];\
          [fg_base]split=2[fg_color][fg_alpha_src];\
          [fg_color]format=rgba[fg_rgba];\
@@ -103,6 +138,8 @@ pub fn build_background_filter_graph(
          [1:v]scale=w={ow}:h={oh}:force_original_aspect_ratio=increase,crop={ow}:{oh}[bg];\
          [bg][fg]overlay=x={p}:y={p}:shortest=1[vout]",
         z = zoom_expression,
+        ax = anchor_x,
+        ay = anchor_y,
         iw = inner_width,
         ih = inner_height,
         ow = output_width,

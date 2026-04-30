@@ -1,6 +1,6 @@
 use crate::models::{
     ExportBackground, ExportDestination, ExportEffect, ExportFormat, ExportRequest,
-    ExportResolution, ExportSegment,
+    ExportResolution, ExportSegment, ZoomAnchor,
 };
 
 pub fn sample_effect() -> ExportEffect {
@@ -9,6 +9,7 @@ pub fn sample_effect() -> ExportEffect {
         start_time: 1.0,
         length: 1.0,
         multiplier: 1.2,
+        anchor: ZoomAnchor { x: 0.5, y: 0.5 },
     }
 }
 

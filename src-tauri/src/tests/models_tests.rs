@@ -66,10 +66,44 @@ fn test_export_request_deserializes_multiple_segments() {
     assert_eq!(request.effects.len(), 1);
     assert_eq!(request.effects[0].effect_type, "zoom");
     assert_eq!(request.effects[0].start_time, 1.0);
+    assert_eq!(request.effects[0].anchor.x, 0.5);
+    assert_eq!(request.effects[0].anchor.y, 0.5);
     assert!(!request.background.enabled);
     assert_eq!(request.background.preset_id, "aurora-1");
     assert_eq!(request.background.padding, 32);
     assert_eq!(request.background.roundedness, 16);
+}
+
+#[test]
+fn test_export_request_deserializes_custom_zoom_anchor() {
+    let value = serde_json::json!({
+        "segments": [
+            {
+                "sourceUrl": "/videos/input.mp4",
+                "inPoint": 0.0,
+                "outPoint": 10.0,
+                "startOnTimeline": 0.0
+            }
+        ],
+        "duration": 10.0,
+        "effects": [
+            {
+                "type": "zoom",
+                "startTime": 1.0,
+                "length": 2.5,
+                "multiplier": 1.5,
+                "anchor": {
+                    "x": 0.25,
+                    "y": 0.75
+                }
+            }
+        ]
+    });
+
+    let request: ExportRequest = serde_json::from_value(value).expect("valid export request");
+
+    assert_eq!(request.effects[0].anchor.x, 0.25);
+    assert_eq!(request.effects[0].anchor.y, 0.75);
 }
 
 #[test]

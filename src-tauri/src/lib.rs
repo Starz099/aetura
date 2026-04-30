@@ -129,9 +129,10 @@ async fn start_export(
             output_height,
             request.background.padding,
             request.background.roundedness,
+            &request.effects,
         )
     } else {
-        filters::build_filter_graph(&zoom_expression)
+        filters::build_filter_graph(&zoom_expression, &request.effects)
     };
     let background_input_path = resolve_background_input_path(&request).map_err(|message| {
         emit_export_status(&app, ExportStatusEvent::failed(message.clone()));
