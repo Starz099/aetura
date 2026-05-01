@@ -2,7 +2,7 @@
 Unit tests for orchestration service.
 """
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 from engine.services import (
     OrchestrationService,
     DraftRequest,
@@ -112,7 +112,7 @@ class TestOrchestrationService:
             grok_api_key="test_key"
         )
         
-        response = await service.draft_script(request)
+        await service.draft_script(request)
         
         # Note: In real tests with proper mocking, this would work
         # For now, this demonstrates the test structure
@@ -133,7 +133,7 @@ class TestOrchestrationService:
             grok_api_key="test_key"
         )
         
-        response = await service.resume_script(request)
+        await service.resume_script(request)
         
         # Response handling structure is demonstrated
     
@@ -152,7 +152,7 @@ class TestOrchestrationService:
             recording_settings={"capture_fps": 30},
         )
         
-        response = await service.record_video(request)
+        await service.record_video(request)
         
         mock_workflow.execute.assert_awaited_once_with(
             url="https://example.com",

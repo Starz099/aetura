@@ -2,7 +2,7 @@
 DOM extraction strategy abstraction for pluggable DOM extraction implementations.
 """
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import Any
 
 
 class DOMStrategy(ABC):

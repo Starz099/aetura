@@ -4,7 +4,6 @@ Base Tool abstraction and Tool Registry for extensible tool system.
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass, field
-import json
 
 
 @dataclass

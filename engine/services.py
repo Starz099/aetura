@@ -6,7 +6,6 @@ from dataclasses import dataclass
 import logging
 
 from workflows import DraftWorkflow, ResumeWorkflow, RecordWorkflow
-from models.script import DemoScript, ToolResult, ToolResultStatus
 
 
 logger = logging.getLogger(__name__)

@@ -4,7 +4,7 @@ Unit tests for DOM extraction strategy and parsing.
 import pytest
 import json
 from unittest.mock import AsyncMock
-from engine.dom.strategy import DOMExtractorV1, DOMStrategy
+from engine.dom.strategy import DOMExtractorV1
 from engine.dom.parser import parse_dom_state, merge_dom_states
 from engine.models.script import DOMElement
 

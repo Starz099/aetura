@@ -1,7 +1,6 @@
 """
 Unit tests for data models.
 """
-import pytest
 from engine.models.script import (
     ToolResult,
     ToolResultStatus,
