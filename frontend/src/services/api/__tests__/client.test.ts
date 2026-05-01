@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { APIClient, APIError } from "../client";
-import { DraftScriptRequest, RecordVideoRequest } from "../types";
+import { DraftScriptRequest, RecordVideoRequest, Step } from "../../../types/api";
 
 describe("APIClient", () => {
   let client: APIClient;
@@ -87,7 +87,7 @@ describe("APIClient", () => {
     it("should reject request with invalid steps type", async () => {
       const invalidRequest = {
         url: "https://example.com",
-        approved_steps: "not an array" as any,
+        approved_steps: "not an array" as unknown as Step[],
       } as RecordVideoRequest;
 
       await expect(client.recordVideo(invalidRequest)).rejects.toThrow(

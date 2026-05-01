@@ -1,4 +1,5 @@
 /// Aetura Tauri application - video export and editing desktop application
+mod constants;
 mod dialogs;
 mod errors;
 mod ffmpeg;

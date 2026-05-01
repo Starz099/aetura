@@ -1,21 +1,9 @@
-export const MIN_EFFECT_LENGTH = 0.1;
-export const MIN_CLIP_DURATION = 0.1;
-export const TIMELINE_DRAG_THRESHOLD_PX = 2;
-export const TIMELINE_TIME_UPDATE_THROTTLE_MS = 75;
+import {
+  MIN_CLIP_DURATION,
+} from "@/config/constants";
 
-export interface EditorClip {
-  id: string;
-  sourceUrl: string;
-  sourceStart: number;
-  sourceEnd: number;
-  timelineStart: number;
-}
-
-export interface ClipLocation {
-  clip: EditorClip;
-  index: number;
-  localTime: number;
-}
+export { MIN_CLIP_DURATION };
+import type { ClipLocation, EditorClip } from "@/types/editor";
 
 const clampNumber = (value: number, min: number, max: number) =>
   Math.min(Math.max(value, min), max);

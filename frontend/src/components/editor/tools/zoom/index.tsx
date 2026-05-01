@@ -11,28 +11,21 @@ import {
   Label,
   Separator,
 } from "@/components/ui";
-import { DEFAULT_ZOOM_ANCHOR, useEditorStore } from "@/store/useEditorStore";
-
-const toNumber = (value: string) => {
-  const parsed = Number(value);
-
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
-
-const MIN_LENGTH = 0.1;
+import {
+  DEFAULT_ZOOM_ANCHOR,
+  MIN_EFFECT_LENGTH,
+} from "@/config/constants";
+import { clamp, toNumber } from "@/lib/numbers";
+import { useEditorStore } from "@/store/useEditorStore";
 
 export function ZoomToolPanel() {
   const duration = useEditorStore((state) => state.duration);
   const selectedEffectId = useEditorStore((state) => state.selectedEffectId);
-  const effect = useEditorStore(
-    (state) =>
-      state.effects.find(
-        (item) => item.id === state.selectedEffectId && item.type === "zoom",
-      ) ?? null,
-  );
+  const effects = useEditorStore((state) => state.effects);
+  const effect =
+    effects.find(
+      (item) => item.id === selectedEffectId && item.type === "zoom",
+    ) ?? null;
   const updateEffect = useEditorStore((state) => state.updateEffect);
   const removeEffect = useEditorStore((state) => state.removeEffect);
   const selectEffect = useEditorStore((state) => state.selectEffect);
@@ -41,7 +34,7 @@ export function ZoomToolPanel() {
     () => effect?.startTime ?? 0,
   );
   const [draftLength, setDraftLength] = useState(
-    () => effect?.length ?? MIN_LENGTH,
+    () => effect?.length ?? MIN_EFFECT_LENGTH,
   );
   const [draftMultiplier, setDraftMultiplier] = useState(
     () => effect?.multiplier ?? 1,
@@ -115,9 +108,9 @@ export function ZoomToolPanel() {
   const startTime = clamp(draftStartTime, 0, maxStart);
   const maxLength =
     safeDuration > 0
-      ? Math.max(safeDuration - startTime, MIN_LENGTH)
+      ? Math.max(safeDuration - startTime, MIN_EFFECT_LENGTH)
       : Number.POSITIVE_INFINITY;
-  const length = clamp(draftLength, MIN_LENGTH, maxLength);
+  const length = clamp(draftLength, MIN_EFFECT_LENGTH, maxLength);
   const multiplier = clamp(draftMultiplier, 1, 4);
   const anchor = {
     x: clamp(draftAnchor.x, 0, 1),
@@ -162,7 +155,7 @@ export function ZoomToolPanel() {
               value={length}
               onChange={(event) => {
                 setDraftLength(
-                  clamp(toNumber(event.target.value), MIN_LENGTH, maxLength),
+                  clamp(toNumber(event.target.value), MIN_EFFECT_LENGTH, maxLength),
                 );
               }}
             />

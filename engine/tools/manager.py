@@ -2,7 +2,7 @@
 Tool manager - registry initialization and convenience functions.
 """
 import json
-from .base import ToolRegistry, ToolExecutionError, ToolExecutionResult
+from .base import ToolRegistry, ToolExecutionError
 from .tools import (
     ClickElementTool,
     TypeTextTool,

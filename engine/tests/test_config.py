@@ -2,7 +2,6 @@
 Unit tests for configuration module.
 """
 import os
-import pytest
 from engine.config import (
     Config,
     WorkflowConfig,

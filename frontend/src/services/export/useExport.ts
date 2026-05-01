@@ -5,17 +5,8 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { flushSync } from "react-dom";
-import type { ExportStatus, ExportStatusEvent } from "./service";
 import { exportService } from "./service";
-import type { ExportRequest as EditorExportRequest } from "@/store/useEditorStore";
-
-export interface ExportState {
-  status: ExportStatus;
-  message: string;
-  progressPercent: number;
-  stage?: ExportStatusEvent["kind"];
-  outputPath?: string;
-}
+import type { ExportRequest, ExportStatusEvent, ExportState, ExportServiceResult } from "@/types/export";
 
 const EXPORT_STATUS_EVENT = "export-status";
 
@@ -118,7 +109,7 @@ export function useExport() {
   }, []);
 
   const export_async = useCallback(
-    async (request: EditorExportRequest, outputDirectory?: string | null) => {
+    async (request: ExportRequest, outputDirectory?: string | null) => {
       flushSync(() => {
         setState({
           status: "running",
@@ -132,7 +123,7 @@ export function useExport() {
       await waitForNextPaint();
 
       try {
-        const result = await exportService.export({
+        const result: ExportServiceResult = await exportService.export({
           segments: request.segments,
           duration: request.duration,
           effects: request.effects,
@@ -141,6 +132,7 @@ export function useExport() {
           resolution: request.resolution,
           fps: request.fps,
           optimizeFileSize: request.optimizeFileSize,
+          destination: request.destination,
           outputDirectory,
         });
 

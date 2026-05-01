@@ -11,7 +11,7 @@ export interface DOMElement {
 
 export interface Action {
   tool_name: string;
-  arguments: Record<string, any>;
+  arguments: Record<string, unknown>;
   description: string;
 }
 
@@ -74,14 +74,10 @@ export interface RecordVideoRequest {
   recording_settings?: RecordingSettingsRequest;
 }
 
-export interface LibraryRequest {
-  // No params needed for library listing
-}
-
 // Response types
 export interface ExploreResponse {
   agent_message?: DemoScript;
-  [key: string]: any; // Fallback for other response formats
+  [key: string]: unknown; // Fallback for other response formats
 }
 
 export interface RecordResponse {

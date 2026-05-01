@@ -7,14 +7,16 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import { Button, Card, CardContent } from "@/components/ui";
-import { ZoomToolPanel } from "@/components/editor/tools";
+import { getToolStrategy } from "@/config/tools";
 import {
   getClipDuration,
   MIN_CLIP_DURATION,
-  MIN_EFFECT_LENGTH,
-  TIMELINE_DRAG_THRESHOLD_PX,
 } from "@/lib/editorTimeline";
 import { useEditorStore } from "@/store/useEditorStore";
+import {
+  MIN_EFFECT_LENGTH,
+  TIMELINE_DRAG_THRESHOLD_PX,
+} from "@/config/constants";
 
 type EffectDragMode = "move" | "start" | "end";
 type ClipDragMode = "start" | "end";
@@ -469,7 +471,13 @@ export function EditorTimeline() {
               </div>
             </section>
 
-            {selectedEffectId ? <ZoomToolPanel key={selectedEffectId} /> : null}
+            {(() => {
+              if (!selectedEffectId) return null;
+              const effect = effects.find((e) => e.id === selectedEffectId);
+              if (!effect) return null;
+              const strategy = getToolStrategy(effect.type);
+              return strategy ? strategy.renderPanel() : null;
+            })()}
           </div>
         </div>
       </CardContent>

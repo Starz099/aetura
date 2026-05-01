@@ -10,8 +10,8 @@ import type {
   RecordResponse,
   LibraryResponse,
   APIErrorResponse,
-} from "./types";
-import { APIError } from "./types";
+} from "@/types/api";
+import { APIError } from "@/types/api";
 
 /**
  * API Client for communicating with the backend.
@@ -41,7 +41,7 @@ export class APIClient {
   private async request<T>(
     method: string,
     endpoint: string,
-    body?: Record<string, any>,
+    body?: unknown,
     options?: {
       timeoutMs?: number;
       retries?: number;
@@ -109,7 +109,7 @@ export class APIClient {
 
     const response = await this.request<{
       agent_message?: DemoScript;
-      [key: string]: any;
+      [key: string]: unknown;
     }>("POST", "/explore", request, {
       timeoutMs: APIClient.MAPPING_TIMEOUT_MS,
       retries: 0,
@@ -135,7 +135,7 @@ export class APIClient {
 
     const response = await this.request<{
       agent_message?: DemoScript;
-      [key: string]: any;
+      [key: string]: unknown;
     }>("POST", "/explore/resume", request, {
       timeoutMs: APIClient.MAPPING_TIMEOUT_MS,
       retries: 0,
@@ -248,4 +248,4 @@ export class APIClient {
 export const apiClient = new APIClient();
 
 // Export types and error class
-export { APIError } from "./types";
+export { APIError } from "@/types/api";

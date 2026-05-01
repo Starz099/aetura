@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 import { useSettingsStore } from "@/store/useSettingsStore";
-import { apiClient, type DemoScript, type Step } from "@/services/api";
+import { apiClient, type DemoScript, type Step, type DOMElement } from "@/services/api";
 
 function Home() {
   const navigate = useNavigate();
@@ -176,7 +176,9 @@ function Home() {
   };
 
   const renderStepDescription = (step: Step) => {
-    const { tool_name, arguments: args, description } = step.action_taken;
+    const { tool_name, description } = step.action_taken;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const args = step.action_taken.arguments as any;
 
     if (description.startsWith("Swapped")) {
       return (
@@ -194,7 +196,7 @@ function Home() {
 
     if (tool_name === "click_element" || tool_name === "hover_element") {
       const targetElement = step.available_elements.find(
-        (el: any) => el.element_id === args?.element_id,
+        (el: DOMElement) => el.element_id === args?.element_id,
       );
       targetDetails = targetElement
         ? `"${targetElement.text}"`
@@ -203,7 +205,7 @@ function Home() {
       targetDetails = args?.url || "";
     } else if (tool_name === "type_text") {
       const targetElement = step.available_elements.find(
-        (el: any) => el.element_id === args?.element_id,
+        (el: DOMElement) => el.element_id === args?.element_id,
       );
       const elName = targetElement
         ? `"${targetElement.text}"`
@@ -333,7 +335,8 @@ function Home() {
                         </p>
                         <select
                           className="h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs"
-                          value={step.action_taken.arguments?.element_id || ""}
+                          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          value={(step.action_taken.arguments as any)?.element_id || ""}
                           onChange={(e) =>
                             handleElementChange(index, e.target.value)
                           }

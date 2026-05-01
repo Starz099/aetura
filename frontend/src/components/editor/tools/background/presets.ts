@@ -1,8 +1,4 @@
-export interface BackgroundPreset {
-  id: string;
-  label: string;
-  imageUrl: string;
-}
+import type { BackgroundPreset } from "@/types/tools";
 
 export const BACKGROUND_PRESETS: BackgroundPreset[] = [
   {

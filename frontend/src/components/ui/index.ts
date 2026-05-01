@@ -1,5 +1,6 @@
 // Badge components
-export { Badge, badgeVariants } from "./badge";
+export { Badge } from "./badge";
+export { badgeVariants } from "./badge.variants";
 
 // Button components
 export { Button } from "./button";

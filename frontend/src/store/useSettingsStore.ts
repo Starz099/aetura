@@ -1,24 +1,6 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-
-export type RecordingPreset =
-  | "ultrafast"
-  | "superfast"
-  | "veryfast"
-  | "faster"
-  | "fast"
-  | "medium"
-  | "slow"
-  | "slower"
-  | "veryslow";
-
-export interface RecordingSettings {
-  captureFps: 15 | 30 | 60;
-  viewportWidth: number;
-  viewportHeight: number;
-  recordAudio: boolean;
-  outputPreset: RecordingPreset;
-}
+import type { RecordingSettings } from "@/types/settings";
 
 export const defaultRecordingSettings: RecordingSettings = {
   captureFps: 30,

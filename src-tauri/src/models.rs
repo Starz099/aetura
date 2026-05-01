@@ -1,4 +1,5 @@
 /// Data models for export functionality
+use crate::constants::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -38,18 +39,18 @@ fn default_resolution() -> ExportResolution {
 }
 
 fn default_fps() -> u32 {
-    60
+    DEFAULT_FPS
 }
 fn default_optimize_file_size() -> bool {
-    false
+    DEFAULT_OPTIMIZE_FILE_SIZE
 }
 
 fn default_zoom_anchor_x() -> f64 {
-    0.5
+    DEFAULT_ZOOM_ANCHOR_X
 }
 
 fn default_zoom_anchor_y() -> f64 {
-    0.5
+    DEFAULT_ZOOM_ANCHOR_Y
 }
 
 fn default_zoom_anchor() -> ZoomAnchor {
@@ -60,19 +61,19 @@ fn default_zoom_anchor() -> ZoomAnchor {
 }
 
 fn default_background_enabled() -> bool {
-    false
+    DEFAULT_BACKGROUND_ENABLED
 }
 
 fn default_background_preset_id() -> String {
-    "aurora-1".to_string()
+    DEFAULT_BACKGROUND_PRESET_ID.to_string()
 }
 
 fn default_background_padding() -> u32 {
-    32
+    DEFAULT_BACKGROUND_PADDING
 }
 
 fn default_background_roundedness() -> u32 {
-    16
+    DEFAULT_BACKGROUND_ROUNDEDNESS
 }
 /// Background settings applied during export.
 #[derive(Debug, Clone, Deserialize)]
