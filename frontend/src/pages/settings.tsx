@@ -1,8 +1,6 @@
 import { Button, Input } from "@/components/ui";
-import {
-  type RecordingPreset,
-  useSettingsStore,
-} from "@/store/useSettingsStore";
+import { useSettingsStore } from "@/store/useSettingsStore";
+import type { RecordingPreset } from "@/types/settings";
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 

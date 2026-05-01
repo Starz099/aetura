@@ -16,10 +16,8 @@ import {
   MIN_BACKGROUND_ROUNDEDNESS,
   MAX_BACKGROUND_PADDING,
   MAX_BACKGROUND_ROUNDEDNESS,
-} from "@/store/useEditorStore";
-
-const clamp = (value: number, min: number, max: number) =>
-  Math.min(Math.max(value, min), max);
+} from "@/config/constants";
+import { clamp } from "@/lib/numbers";
 
 export function BackgroundToolPanel() {
   const backgroundSettings = useEditorStore(

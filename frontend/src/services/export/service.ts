@@ -3,55 +3,13 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import type { ExportRequest as EditorExportRequest } from "@/store/useEditorStore";
-import type { EditorClip } from "@/lib/editorTimeline";
+import type { EditorClip } from "@/types/editor";
+import type { ExportRequest as BaseExportRequest, ExportSegment, ExportServiceResult } from "@/types/export";
 
-export type ExportStatus =
-  | "idle"
-  | "running"
-  | "success"
-  | "error"
-  | "cancelled";
-
-export type ExportEventKind =
-  | "started"
-  | "progress"
-  | "completed"
-  | "failed"
-  | "cancelled";
-
-export interface ExportStatusEvent {
-  kind: ExportEventKind;
-  progressPercent?: number;
-  message?: string;
-  outputPath?: string;
-}
-
-export interface ExportResult {
-  status: ExportStatus;
-  message: string;
-  progressPercent?: number;
-  outputPath?: string;
-}
-
-export interface ExportSegment {
-  sourceUrl: string;
-  inPoint: number;
-  outPoint: number;
-  startOnTimeline: number;
-}
-
-export interface ExportRequest {
-  segments: ExportSegment[];
-  duration: number;
-  effects: EditorExportRequest["effects"];
-  background: EditorExportRequest["background"];
-  format: EditorExportRequest["format"];
-  resolution: EditorExportRequest["resolution"];
-  fps: EditorExportRequest["fps"];
-  optimizeFileSize: EditorExportRequest["optimizeFileSize"];
+export interface ExportRequest extends BaseExportRequest {
   outputDirectory?: string | null;
 }
+
 
 /**
  * Export service for handling video export operations.
@@ -69,7 +27,7 @@ export class ExportService {
     }));
   }
 
-  async export(request: ExportRequest): Promise<ExportResult> {
+  async export(request: ExportRequest): Promise<ExportServiceResult> {
     this.validateRequest(request);
 
     console.log("ExportService.export() called");

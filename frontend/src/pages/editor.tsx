@@ -12,10 +12,9 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import {
   buildExportRequest,
-  type ExportFormat,
-  type ExportResolution,
   useEditorStore,
 } from "@/store/useEditorStore";
+import type { ExportFormat, ExportResolution } from "@/types/export";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { EditorPreview } from "@/components/editor/preview";
 import { EditorTimeline } from "@/components/editor/timeline";

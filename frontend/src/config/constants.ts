@@ -1,0 +1,19 @@
+export const MIN_EFFECT_LENGTH = 0.1;
+export const MIN_CLIP_DURATION = 0.1;
+export const TIMELINE_DRAG_THRESHOLD_PX = 2;
+export const TIMELINE_TIME_UPDATE_THROTTLE_MS = 75;
+
+export const DEFAULT_ZOOM_LENGTH = 3;
+export const DEFAULT_ZOOM_MULTIPLIER = 1.25;
+export const DEFAULT_ZOOM_ANCHOR = {
+  x: 0.5,
+  y: 0.5,
+};
+
+export const DEFAULT_BACKGROUND_PRESET_ID = "aurora-1";
+export const DEFAULT_BACKGROUND_PADDING = 32;
+export const DEFAULT_BACKGROUND_ROUNDEDNESS = 16;
+export const MAX_BACKGROUND_ROUNDEDNESS = 32;
+export const MIN_BACKGROUND_ROUNDEDNESS = 0;
+export const MAX_BACKGROUND_PADDING = 64;
+export const MIN_BACKGROUND_PADDING = 0;

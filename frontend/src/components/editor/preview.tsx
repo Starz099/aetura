@@ -5,24 +5,17 @@ import {
   findClipAtSourceTime,
   findNextClipAfterSourceTime,
   mapTimelineTimeToSourceTime,
-  TIMELINE_TIME_UPDATE_THROTTLE_MS,
 } from "@/lib/editorTimeline";
 import { getBackgroundPreset } from "@/components/editor/tools/background/presets";
+import { useEditorStore, DEFAULT_ZOOM_ANCHOR } from "@/store/useEditorStore";
 import {
   MAX_BACKGROUND_PADDING,
   MAX_BACKGROUND_ROUNDEDNESS,
-  DEFAULT_ZOOM_ANCHOR,
   MIN_BACKGROUND_PADDING,
   MIN_BACKGROUND_ROUNDEDNESS,
-  useEditorStore,
-} from "@/store/useEditorStore";
-
-interface EditorPreviewProps {
-  previewUrl: string | null;
-  autoPlay?: boolean;
-  showMuteToggle?: boolean;
-  thumbnailMode?: boolean;
-}
+  TIMELINE_TIME_UPDATE_THROTTLE_MS,
+} from "@/config/constants";
+import type { EditorPreviewProps } from "@/types/ui";
 
 export function EditorPreview({
   previewUrl,
