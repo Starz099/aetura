@@ -62,6 +62,7 @@ export const createTimelineSlice: StateCreator<
   initializeTimeline: (sourceUrl, duration) => {
     const safeDuration = clampNonNegative(duration);
     set({
+      isPlaying: false,
       sourceUrl,
       sourceDuration: safeDuration,
       duration: safeDuration,

@@ -112,11 +112,11 @@ class TestOrchestrationService:
             grok_api_key="test_key"
         )
         
-        await service.draft_script(request)
+        response = await service.draft_script(request)
         
-        # Note: In real tests with proper mocking, this would work
-        # For now, this demonstrates the test structure
-        
+        assert response.success is True
+        mock_workflow.execute.assert_awaited_once()
+
     @pytest.mark.asyncio
     @patch('engine.services.ResumeWorkflow')
     async def test_resume_script_success(self, mock_workflow_class):
@@ -133,10 +133,11 @@ class TestOrchestrationService:
             grok_api_key="test_key"
         )
         
-        await service.resume_script(request)
-        
-        # Response handling structure is demonstrated
-    
+        response = await service.resume_script(request)
+
+        assert response.success is True
+        mock_workflow.execute.assert_awaited_once()
+
     @pytest.mark.asyncio
     @patch('engine.services.RecordWorkflow')
     async def test_record_video_success(self, mock_workflow_class):
@@ -152,8 +153,9 @@ class TestOrchestrationService:
             recording_settings={"capture_fps": 30},
         )
         
-        await service.record_video(request)
+        response = await service.record_video(request)
         
+        assert response.success is True
         mock_workflow.execute.assert_awaited_once_with(
             url="https://example.com",
             approved_steps=[{"action_taken": {"tool_name": "click_element", "arguments": {}}}],
