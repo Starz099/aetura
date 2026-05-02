@@ -4,6 +4,7 @@ import { Button, Card, CardContent } from "@/components/ui";
 import {
   findClipAtSourceTime,
   findNextClipAfterSourceTime,
+  mapSourceTimeToTimelineTime,
   mapTimelineTimeToSourceTime,
 } from "@/lib/editorTimeline";
 import { getBackgroundPreset } from "@/components/editor/tools/background/presets";
@@ -14,6 +15,7 @@ import {
   MIN_BACKGROUND_PADDING,
   MIN_BACKGROUND_ROUNDEDNESS,
   TIMELINE_TIME_UPDATE_THROTTLE_MS,
+  ZOOM_TRANSITION_DURATION
 } from "@/config/constants";
 import type { EditorPreviewProps } from "@/types/ui";
 
@@ -29,25 +31,80 @@ export function EditorPreview({
   const currentTime = useEditorStore((state) => state.currentTime);
   const isPlaying = useEditorStore((state) => state.isPlaying);
   const clips = useEditorStore((state) => state.clips);
-  const activeZoomEffect = useEditorStore(
-    (state) =>
-      state.effects.find(
-        (effect) =>
-          effect.type === "zoom" &&
-          currentTime >= effect.startTime &&
-          currentTime <= effect.startTime + effect.length,
-      ) ?? null,
-  );
   const initializeTimeline = useEditorStore(
     (state) => state.initializeTimeline,
   );
   const setCurrentTime = useEditorStore((state) => state.setCurrentTime);
   const setIsPlaying = useEditorStore((state) => state.setIsPlaying);
+  const effects = useEditorStore((state) => state.effects);
   const backgroundSettings = useEditorStore(
     (state) => state.backgroundSettings,
   );
-  const zoomScale = activeZoomEffect?.multiplier ?? 1;
-  const zoomAnchor = activeZoomEffect?.anchor ?? DEFAULT_ZOOM_ANCHOR;
+
+  const [currentZoomScale, setCurrentZoomScale] = useState(1);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const updateZoom = (time: number) => {
+      const activeEffect =
+        effects.find(
+          (effect) =>
+            effect.type === "zoom" &&
+            time >= effect.startTime &&
+            time <= effect.startTime + effect.length,
+        ) ?? null;
+
+      let scale = 1;
+      let anchor = DEFAULT_ZOOM_ANCHOR;
+
+      if (activeEffect) {
+        const { startTime, length, multiplier, anchor: targetAnchor } = activeEffect;
+        const endTime = startTime + length;
+
+        const progressIn = Math.max(
+          0,
+          Math.min(1, (time - startTime) / ZOOM_TRANSITION_DURATION),
+        );
+        const progressOut = Math.max(
+          0,
+          Math.min(1, (endTime - time) / ZOOM_TRANSITION_DURATION),
+        );
+        const progress = Math.min(progressIn, progressOut);
+
+        const ease = progress * progress * (3 - 2 * progress);
+
+        scale = 1 + (multiplier - 1) * ease;
+        anchor = {
+          x: 0.5 + (targetAnchor.x - 0.5) * ease,
+          y: 0.5 + (targetAnchor.y - 0.5) * ease,
+        };
+      }
+
+      video.style.transform = `scale(${scale})`;
+      video.style.transformOrigin = `${anchor.x * 100}% ${anchor.y * 100}%`;
+      setCurrentZoomScale(scale);
+    };
+
+    let rafId: number;
+    const loop = () => {
+      const timelineTime = mapSourceTimeToTimelineTime(clips, video.currentTime);
+      updateZoom(timelineTime);
+      rafId = requestAnimationFrame(loop);
+    };
+
+    if (isPlaying) {
+      rafId = requestAnimationFrame(loop);
+    } else {
+      updateZoom(currentTime);
+    }
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+    };
+  }, [isPlaying, currentTime, effects, clips]);
+
   const backgroundPreset = getBackgroundPreset(backgroundSettings.presetId);
   const previewPadding = backgroundSettings.enabled
     ? Math.min(
@@ -150,9 +207,9 @@ export function EditorPreview({
         <div className="relative h-full w-full overflow-hidden border-2 border-border/80 bg-muted/45 shadow-[0_3px_0_var(--shadow-soft)]">
           {previewUrl ? (
             <>
-              {activeZoomEffect ? (
+              {currentZoomScale > 1.001 ? (
                 <div className="absolute left-3 top-3 z-10 rounded-full border border-border/70 bg-background/90 px-2 py-1 text-[10px] font-medium shadow-[0_2px_0_var(--shadow-soft)]">
-                  Zoom x{activeZoomEffect.multiplier.toFixed(2)}
+                  Zoom x{currentZoomScale.toFixed(2)}
                 </div>
               ) : null}
               <div
@@ -182,9 +239,6 @@ export function EditorPreview({
                       className="h-full w-full bg-transparent object-cover object-center"
                       style={{
                         borderRadius: `${previewBorderRadius}px`,
-                        transform: `scale(${zoomScale})`,
-                        transformOrigin: `${zoomAnchor.x * 100}% ${zoomAnchor.y * 100}%`,
-                        transition: "transform 150ms ease-out",
                       }}
                       onLoadedMetadata={(event) => {
                         // Keep the thumbnail/export preview read-only so it does not

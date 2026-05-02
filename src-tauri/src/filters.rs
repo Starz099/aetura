@@ -4,7 +4,8 @@ use std::path::PathBuf;
 
 pub const MAX_BACKGROUND_PADDING: u32 = 64;
 pub const MAX_BACKGROUND_ROUNDEDNESS: u32 = 32;
-
+pub const ZOOM_TRANSITION_DURATION: f64 = 0.4;
+    
 fn build_rounded_alpha_expression(radius: u32) -> String {
     format!(
         "255*clip({r}+0.5-sqrt(pow(max(abs(X-(W-1)/2)-(W/2-{r})\\,0)\\,2)+pow(max(abs(Y-(H-1)/2)-(H/2-{r})\\,0)\\,2))\\,0\\,1)",
@@ -12,10 +13,23 @@ fn build_rounded_alpha_expression(radius: u32) -> String {
     )
 }
 
+/// Helper to build a smooth ramp expression (0 to 1 back to 0) for a given time window.
+/// Uses a quadratic easing formula: x*x*(3-2*x)
+fn build_smooth_ramp_expression(start: f64, length: f64) -> String {
+    let end = start + length;
+    let dur = ZOOM_TRANSITION_DURATION;
+
+    // st(0, ...) stores the raw linear progress (min of progressIn and progressOut, capped at 1.0)
+    // ld(0) loads it to apply the easing formula: ld(0)*ld(0)*(3-2*ld(0))
+    // We use clip(x, 0, 1) to ensure progress stays in [0, 1] range.
+    format!(
+        "st(0,clip(min((t-{:.6})/{:.6},({:.6}-t)/{:.6}),0,1))*ld(0)*ld(0)*(3-2*ld(0))",
+        start, dur, end, dur
+    )
+}
+
+
 /// Build FFmpeg zoom expression from effects
-///
-/// Generates an expression like: `1*if(between(t,0.0,1.5),1.5,1)*if(between(t,3.0,4.5),2.0,1)`
-/// which applies zoom multipliers at specified times.
 pub fn build_zoom_expression(mut effects: Vec<ExportEffect>) -> String {
     effects.sort_by(|a, b| a.start_time.total_cmp(&b.start_time));
 
@@ -25,10 +39,10 @@ pub fn build_zoom_expression(mut effects: Vec<ExportEffect>) -> String {
 
     let mut expression = String::from("1");
     for effect in effects {
-        let end_time = effect.start_time + effect.length;
+        let ramp = build_smooth_ramp_expression(effect.start_time, effect.length);
         expression.push_str(&format!(
-            "*if(between(t,{:.6},{:.6}),{:.6},1)",
-            effect.start_time, end_time, effect.multiplier
+            "+({:.6}-1)*({})",
+            effect.multiplier, ramp
         ));
     }
 
@@ -38,21 +52,24 @@ pub fn build_zoom_expression(mut effects: Vec<ExportEffect>) -> String {
 fn build_zoom_anchor_expression(mut effects: Vec<ExportEffect>, axis: AnchorAxis) -> String {
     effects.sort_by(|a, b| a.start_time.total_cmp(&b.start_time));
 
-    effects
-        .into_iter()
-        .rev()
-        .fold("0.500000".to_string(), |fallback, effect| {
-            let anchor_value = match axis {
-                AnchorAxis::X => effect.anchor.x,
-                AnchorAxis::Y => effect.anchor.y,
-            };
-            let end_time = effect.start_time + effect.length;
+    if effects.is_empty() {
+        return "0.5".to_string();
+    }
 
-            format!(
-                "if(between(t,{:.6},{:.6}),{:.6},({}))",
-                effect.start_time, end_time, anchor_value, fallback
-            )
-        })
+    let mut expression = String::from("0.5");
+    for effect in effects {
+        let anchor_value = match axis {
+            AnchorAxis::X => effect.anchor.x,
+            AnchorAxis::Y => effect.anchor.y,
+        };
+        let ramp = build_smooth_ramp_expression(effect.start_time, effect.length);
+        expression.push_str(&format!(
+            "+({:.6}-0.5)*({})",
+            anchor_value, ramp
+        ));
+    }
+
+    expression
 }
 
 enum AnchorAxis {

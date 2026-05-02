@@ -17,7 +17,8 @@ fn test_single_effect() {
     }];
     let expression = build_zoom_expression(effects);
     assert!(expression.contains("1.500000"));
-    assert!(expression.contains("between(t,0.000000,2.000000)"));
+    assert!(expression.contains("clip(min((t-0.000000)/0.400000,(2.000000-t)/0.400000),0,1)"));
+    assert!(expression.contains("*ld(0)*ld(0)*(3-2*ld(0))"));
 }
 
 #[test]
@@ -41,10 +42,10 @@ fn test_effects_sorted_by_start_time() {
     let expression = build_zoom_expression(effects);
 
     let early = expression
-        .find("between(t,1.000000,2.000000),1.500000")
+        .find("+(1.500000-1)*(st(0,clip(min((t-1.000000)/0.400000,(2.000000-t)/0.400000),0,1))*ld(0)*ld(0)*(3-2*ld(0)))")
         .expect("expected early effect segment");
     let late = expression
-        .find("between(t,5.000000,6.000000),2.000000")
+        .find("+(2.000000-1)*(st(0,clip(min((t-5.000000)/0.400000,(6.000000-t)/0.400000),0,1))*ld(0)*ld(0)*(3-2*ld(0)))")
         .expect("expected late effect segment");
 
     assert!(early < late);
@@ -61,12 +62,10 @@ fn test_filter_graph_uses_custom_anchor() {
     }];
     let graph = build_filter_graph("1.500000", &effects);
 
-    assert!(graph.contains(
-        "overlay=x='(W-w)*(if(between(t,0.000000,2.000000),0.250000,(0.500000)))'"
-    ));
-    assert!(graph.contains(
-        "y='(H-h)*(if(between(t,0.000000,2.000000),0.750000,(0.500000)))'"
-    ));
+    // X axis ramp
+    assert!(graph.contains("+(0.250000-0.5)*(st(0,clip(min((t-0.000000)/0.400000,(2.000000-t)/0.400000),0,1))*ld(0)*ld(0)*(3-2*ld(0)))"));
+    // Y axis ramp
+    assert!(graph.contains("+(0.750000-0.5)*(st(0,clip(min((t-0.000000)/0.400000,(2.000000-t)/0.400000),0,1))*ld(0)*ld(0)*(3-2*ld(0)))"));
 }
 
 #[test]

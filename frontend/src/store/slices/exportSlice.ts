@@ -54,7 +54,7 @@ export const buildExportRequest = (
     .sort((a, b) => a.startTime - b.startTime);
 
   const segments = clips.map((clip) => ({
-    sourceUrl: clip.sourceUrl,
+    sourceUrl: source,
     inPoint: clip.sourceStart,
     outPoint: clip.sourceEnd,
     startOnTimeline: clip.timelineStart,
