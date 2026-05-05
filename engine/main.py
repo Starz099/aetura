@@ -126,7 +126,7 @@ async def resume_website(request: ResumeRequest):
 async def record_website(request: RecordRequest):
     print(f"Received API request to record: {request.url}")
     try:
-        full_video_path = await record_demo_video(
+        full_video_path, enriched_steps = await record_demo_video(
             request.url,
             request.approved_steps,
             _dump_recording_settings(request.recording_settings),
@@ -138,6 +138,7 @@ async def record_website(request: RecordRequest):
     return {
         "status": "success",
         "video_url": f"http://localhost:8000/recordings/{filename}",
+        "enriched_steps": enriched_steps,
     }
 
 

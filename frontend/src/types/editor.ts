@@ -34,3 +34,8 @@ export interface EditorBackgroundSettings {
   padding: number;
   roundedness: number;
 }
+
+export interface EditorManifest {
+  effects: EditorEffect[];
+  background: EditorBackgroundSettings;
+}

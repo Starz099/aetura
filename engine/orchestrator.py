@@ -44,7 +44,7 @@ async def record_demo_video(
     url: str,
     approved_steps: list,
     recording_settings: Optional[Dict[str, Any]] = None,
-) -> str:
+) -> tuple[str, list]:
     """
     Record a demo video of automation steps.
     
