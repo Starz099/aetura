@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 import { useSettingsStore } from "@/store/useSettingsStore";
+import { useEditorStore } from "@/store/useEditorStore";
 import { apiClient, type DemoScript, type Step, type DOMElement } from "@/services/api";
 
 function Home() {
@@ -94,6 +95,8 @@ function Home() {
     }
   };
 
+  const setEnrichedSteps = useEditorStore((state) => state.setEnrichedSteps);
+
   const handleRecordScript = async () => {
     if (recordInFlightRef.current || isRecording) return;
     if (!scriptData) return;
@@ -116,6 +119,9 @@ function Home() {
       });
 
       if (response.status === "success" && response.video_url) {
+        if (response.enriched_steps) {
+          setEnrichedSteps(response.enriched_steps);
+        }
         setFinalVideoUrl(response.video_url);
       }
       console.log("Recording response:", response);

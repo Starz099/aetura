@@ -6,8 +6,10 @@ import type {
   DraftScriptRequest,
   ResumeScriptRequest,
   RecordVideoRequest,
+  EditRequest,
   DemoScript,
   RecordResponse,
+  EditResponse,
   LibraryResponse,
   APIErrorResponse,
 } from "@/types/api";
@@ -168,6 +170,27 @@ export class APIClient {
 
     if (response.status === "error") {
       throw new Error(response.message || "Failed to record video");
+    }
+
+    return response;
+  }
+
+  /**
+   * Generate or refine an editor manifest using AI.
+   */
+  async editVideo(request: EditRequest): Promise<EditResponse> {
+    const response = await this.request<EditResponse>(
+      "POST",
+      "/edit",
+      request,
+      {
+        timeoutMs: APIClient.MAPPING_TIMEOUT_MS,
+        retries: 0,
+      },
+    );
+
+    if (response.status === "error") {
+      throw new Error(response.message || "Failed to edit video");
     }
 
     return response;

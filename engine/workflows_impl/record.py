@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from typing import Dict, List, Optional
 
+from models.script import BoundingBox, EnrichedStep
 from .base import Workflow
 from .mocks import MockToolCall
 from .settings import _sanitize_recording_settings
@@ -188,10 +189,12 @@ class RecordWorkflow(Workflow):
                 await self._execute_tool_call(mock_call)
                 
                 # Build enriched step data
-                enriched_step = step_data.copy()
-                enriched_step["timestamp"] = current_timestamp
-                enriched_step["element_rect"] = element_rect
-                enriched_steps.append(enriched_step)
+                enriched_step = EnrichedStep(
+                    **step_data,
+                    timestamp=current_timestamp,
+                    element_rect=element_rect
+                )
+                enriched_steps.append(enriched_step.model_dump())
 
                 await self.page.wait_for_load_state("load")
                 await asyncio.sleep(1)

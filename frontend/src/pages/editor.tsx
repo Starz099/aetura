@@ -5,7 +5,6 @@ import {
   CardHeader,
   CardTitle,
   Separator,
-  Textarea,
 } from "@/components/ui";
 import { Button } from "@/components/ui";
 import { useEffect, useMemo, useState } from "react";
@@ -18,6 +17,7 @@ import type { ExportFormat, ExportResolution } from "@/types/export";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { EditorPreview } from "@/components/editor/preview";
 import { EditorTimeline } from "@/components/editor/timeline";
+import { AIEditorChat } from "@/components/editor/AIEditorChat";
 import { BackgroundToolPanel } from "@/components/editor/tools";
 import { useExport } from "@/services/export";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
@@ -72,6 +72,7 @@ const EditorPage = () => {
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
   const selectEffect = useEditorStore((state) => state.selectEffect);
   const effects = useEditorStore((state) => state.effects);
+  const selectedEffectId = useEditorStore((state) => state.selectedEffectId);
   const backgroundSettings = useEditorStore(
     (state) => state.backgroundSettings,
   );
@@ -494,29 +495,7 @@ const EditorPage = () => {
               </div>
             </Card>
 
-            <Card className="min-h-0 flex-1 relative">
-              <CardHeader className="pb-1">
-                <CardTitle>AI Chat</CardTitle>
-                <CardDescription>
-                  Assistant controls for editing.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex h-full min-h-0 flex-col gap-2">
-                <div className="min-h-16 flex-1 rounded-md border border-border/80 bg-muted/35 p-2 text-xs text-muted-foreground shadow-[0_2px_0_var(--shadow-soft)]">
-                  Ask for cuts, transitions, overlays, and timeline tweaks.
-                </div>
-                <Textarea
-                  placeholder="Type a prompt..."
-                  className="min-h-20 resize-none"
-                />
-                <Button className="self-end">Send</Button>
-              </CardContent>
-              <div className="absolute inset-0 z-10 bg-background/40 backdrop-blur-sm rounded-lg flex items-center justify-center">
-                <span className="text-sm font-medium text-muted-foreground">
-                  Coming Soon
-                </span>
-              </div>
-            </Card>
+            <AIEditorChat />
           </section>
 
           <section className="flex min-h-0 flex-col gap-3">

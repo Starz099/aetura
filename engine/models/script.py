@@ -64,12 +64,21 @@ class BoundingBox(BaseModel):
 
 
 class Step(BaseModel):
-    """Represents one complete action cycle in the timeline."""
-
+    """
+    Represents one complete action cycle during mapping/drafting.
+    This model is kept simple to avoid distracting the AI during script generation.
+    """
     step_number: int
     current_url: str
     action_taken: Action
     available_elements: List[DOMElement]
+
+
+class EnrichedStep(Step):
+    """
+    Enriched version of a step used ONLY during recording.
+    Contains precise execution metadata for the editor.
+    """
     timestamp: float = Field(
         default=0.0, 
         description="Timestamp in seconds from the start of the recording."
@@ -87,6 +96,7 @@ class DemoScript(BaseModel):
     starting_url: str
     steps: List[Step]
 
+
 class ZoomAnchor(BaseModel):
     """Represents the anchor point for a zoom effect."""
     x: float
@@ -97,7 +107,7 @@ class ZoomEffect(BaseModel):
     """Represents a zoom effect in the timeline."""
     id: str
     startTime: float
-    duration: float
+    length: float
     multiplier: float
     anchor: ZoomAnchor
 

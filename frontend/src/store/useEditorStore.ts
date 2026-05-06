@@ -1,14 +1,26 @@
 import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { createTimelineSlice } from "./slices/timelineSlice";
 import { createEffectSlice } from "./slices/effectSlice";
 import { createExportSlice } from "./slices/exportSlice";
 import type { EditorState } from "@/types/store";
 
-export const useEditorStore = create<EditorState>()((...a) => ({
-  ...createTimelineSlice(...a),
-  ...createEffectSlice(...a),
-  ...createExportSlice(...a),
-}));
+export const useEditorStore = create<EditorState>()(
+  persist(
+    (...a) => ({
+      ...createTimelineSlice(...a),
+      ...createEffectSlice(...a),
+      ...createExportSlice(...a),
+    }),
+    {
+      name: "aetura-editor-storage",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        enrichedSteps: state.enrichedSteps,
+      }),
+    }
+  )
+);
 
 // Re-export constants that might be used by components if needed, 
 // though they should ideally come from @/config/constants

@@ -1,5 +1,5 @@
 from typing import Any, Dict, Optional
-from workflows import DraftWorkflow, ResumeWorkflow, RecordWorkflow
+from workflows import DraftWorkflow, ResumeWorkflow, RecordWorkflow, EditWorkflow
 
 
 async def draft_demo_script(url: str, intent: str, grok_api_key: str) -> dict:
@@ -58,4 +58,28 @@ async def record_demo_video(
     """
     workflow = RecordWorkflow()
     return await workflow.execute(url, approved_steps, recording_settings)
+
+
+async def edit_video_manifest(
+    steps: list,
+    intent: str,
+    current_manifest: Optional[Dict[str, Any]] = None,
+    grok_api_key: str = "",
+    duration: Optional[float] = None,
+) -> dict:
+    """
+    Generate or refine an editor manifest using AI.
+    
+    Args:
+        steps: Video interaction steps with metadata
+        intent: User's editing intent/instructions
+        current_manifest: Current manifest to refine (optional)
+        grok_api_key: Groq API key
+        duration: Total video duration in seconds (optional)
+        
+    Returns:
+        EditorManifest with effects and background settings
+    """
+    workflow = EditWorkflow()
+    return await workflow.execute(steps, intent, current_manifest, grok_api_key, duration)
 
