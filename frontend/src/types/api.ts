@@ -1,6 +1,7 @@
 /**
  * Type definitions for API contracts.
  */
+import { type EditorManifest } from "@/types/editor";
 
 export interface DOMElement {
   element_id: number;
@@ -74,6 +75,14 @@ export interface RecordVideoRequest {
   recording_settings?: RecordingSettingsRequest;
 }
 
+export interface EditRequest {
+  steps: Step[];
+  intent: string;
+  current_manifest?: EditorManifest;
+  grok_api_key: string;
+  duration?: number;
+}
+
 // Response types
 export interface ExploreResponse {
   agent_message?: DemoScript;
@@ -83,6 +92,13 @@ export interface ExploreResponse {
 export interface RecordResponse {
   status: "success" | "error";
   video_url?: string;
+  enriched_steps?: Step[];
+  message?: string;
+}
+
+export interface EditResponse {
+  status: "success" | "error";
+  manifest?: EditorManifest;
   message?: string;
 }
 

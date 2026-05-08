@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from typing import Dict, List, Optional
 
+from models.script import BoundingBox, EnrichedStep
 from .base import Workflow
 from .mocks import MockToolCall
 from .settings import _sanitize_recording_settings
@@ -20,8 +21,8 @@ class RecordWorkflow(Workflow):
         url: str,
         approved_steps: List[Dict[str, object]],
         recording_settings: Optional[Dict[str, object]] = None,
-    ) -> str:
-        """Record a video of automation steps."""
+    ) -> tuple[str, List[Dict[str, object]]]:
+        """Record a video of automation steps and return (video_path, enriched_steps)."""
         # Note: This workflow doesn't need AI, so we don't initialize it
         os.makedirs("recordings", exist_ok=True)
         config = _sanitize_recording_settings(recording_settings)
@@ -40,9 +41,9 @@ class RecordWorkflow(Workflow):
             f"recordings/demo_{int(asyncio.get_event_loop().time())}.mp4",
         )
 
-        # Use direct Playwright async context instead of BrowserEngine
-        # to access CDP session for frame capture
         from playwright.async_api import async_playwright
+
+        enriched_steps = []
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(
@@ -92,6 +93,8 @@ class RecordWorkflow(Workflow):
                 },
             )
 
+            recording_start_time = asyncio.get_event_loop().time()
+
             if config["record_audio"]:
                 audio_cmd = [
                     "ffmpeg",
@@ -124,57 +127,74 @@ class RecordWorkflow(Workflow):
             step_count = 0
             for step_data in approved_steps:
                 step_count += 1
-                print(f"Recording Step {step_count}...")
+                current_timestamp = asyncio.get_event_loop().time() - recording_start_time
+                print(f"Recording Step {step_count} at {current_timestamp:.2f}s...")
 
                 await self._get_dom_state()  # For DOM state tracking
 
                 action_name = step_data["action_taken"]["tool_name"]
                 action_args = step_data["action_taken"]["arguments"]
 
-                # Show cursor movement for UI interactions
-                if action_name in ["click_element", "hover_element"] and "element_id" in action_args:
+                # Capture element position if applicable
+                element_rect = None
+                if "element_id" in action_args:
                     el_id = action_args["element_id"]
-                    box = await self.page.evaluate(
+                    element_rect = await self.page.evaluate(
                         f"""
                         () => {{
                             const el = document.querySelector('[data-aetura-id="{el_id}"]');
                             if (!el) return null;
                             const rect = el.getBoundingClientRect();
-                            return {{ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }};
+                            return {{ 
+                                x: rect.left, 
+                                y: rect.top, 
+                                width: rect.width, 
+                                height: rect.height 
+                            }};
                         }}
                         """
                     )
 
-                    if box:
-                        await self.page.evaluate(
-                            f"""
-                            () => {{
-                                let cursor = document.getElementById('aetura-cursor');
-                                if (!cursor) {{
-                                    cursor = document.createElement('div');
-                                    cursor.id = 'aetura-cursor';
-                                    cursor.style.width = '24px';
-                                    cursor.style.height = '24px';
-                                    cursor.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
-                                    cursor.style.border = '2px solid white';
-                                    cursor.style.borderRadius = '50%';
-                                    cursor.style.position = 'fixed';
-                                    cursor.style.pointerEvents = 'none';
-                                    cursor.style.zIndex = '999999';
-                                    cursor.style.transition = 'top 0.5s ease-out, left 0.5s ease-out';
-                                    cursor.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
-                                    document.body.appendChild(cursor);
-                                }}
-                                cursor.style.left = '{box["x"]}px';
-                                cursor.style.top = '{box["y"]}px';
+                # Show cursor movement for UI interactions
+                if action_name in ["click_element", "hover_element"] and element_rect:
+                    await self.page.evaluate(
+                        f"""
+                        (box) => {{
+                            let cursor = document.getElementById('aetura-cursor');
+                            if (!cursor) {{
+                                cursor = document.createElement('div');
+                                cursor.id = 'aetura-cursor';
+                                cursor.style.width = '24px';
+                                cursor.style.height = '24px';
+                                cursor.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                                cursor.style.border = '2px solid white';
+                                cursor.style.borderRadius = '50%';
+                                cursor.style.position = 'fixed';
+                                cursor.style.pointerEvents = 'none';
+                                cursor.style.zIndex = '999999';
+                                cursor.style.transition = 'top 0.5s ease-out, left 0.5s ease-out';
+                                cursor.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+                                document.body.appendChild(cursor);
                             }}
-                            """
-                        )
-                        await asyncio.sleep(0.6)
+                            cursor.style.left = (box.x + box.width / 2) + 'px';
+                            cursor.style.top = (box.y + box.height / 2) + 'px';
+                        }}
+                        """,
+                        element_rect
+                    )
+                    await asyncio.sleep(0.6)
 
                 # Execute action
                 mock_call = MockToolCall(action_name, action_args)
                 await self._execute_tool_call(mock_call)
+                
+                # Build enriched step data
+                enriched_step = EnrichedStep(
+                    **step_data,
+                    timestamp=current_timestamp,
+                    element_rect=element_rect
+                )
+                enriched_steps.append(enriched_step.model_dump())
 
                 await self.page.wait_for_load_state("load")
                 await asyncio.sleep(1)
@@ -244,4 +264,4 @@ class RecordWorkflow(Workflow):
             os.remove(audio_path)
         print(f"Video saved: {video_path}")
 
-        return video_path
+        return video_path, enriched_steps

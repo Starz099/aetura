@@ -14,6 +14,7 @@ import type {
   EditorBackgroundSettings,
   EditorEffect,
   EditorEffectType,
+  EditorManifest,
   ZoomAnchor,
 } from "@/types/editor";
 import type { EffectSlice, TimelineSlice } from "@/types/store";
@@ -165,4 +166,18 @@ export const createEffectSlice: StateCreator<
 
   resetBackgroundSettings: () =>
     set({ backgroundSettings: defaultBackgroundSettings }),
+
+  applyManifest: (manifest) =>
+    set((state) => {
+      // Normalize effects using the existing clampEffect logic
+      const normalizedEffects = manifest.effects.map((effect) =>
+        get().clampEffect(effect, state.duration),
+      );
+
+      return {
+        effects: normalizedEffects,
+        backgroundSettings: normalizeBackgroundSettings(manifest.background),
+        selectedEffectId: null,
+      };
+    }),
 });

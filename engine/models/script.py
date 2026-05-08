@@ -55,13 +55,38 @@ class Action(BaseModel):
     )
 
 
-class Step(BaseModel):
-    """Represents one complete action cycle in the timeline."""
+class BoundingBox(BaseModel):
+    """Represents the position and size of an element."""
+    x: float
+    y: float
+    width: float
+    height: float
 
+
+class Step(BaseModel):
+    """
+    Represents one complete action cycle during mapping/drafting.
+    This model is kept simple to avoid distracting the AI during script generation.
+    """
     step_number: int
     current_url: str
     action_taken: Action
     available_elements: List[DOMElement]
+
+
+class EnrichedStep(Step):
+    """
+    Enriched version of a step used ONLY during recording.
+    Contains precise execution metadata for the editor.
+    """
+    timestamp: float = Field(
+        default=0.0, 
+        description="Timestamp in seconds from the start of the recording."
+    )
+    element_rect: Optional[BoundingBox] = Field(
+        default=None,
+        description="Bounding box of the element involved in the action."
+    )
 
 
 class DemoScript(BaseModel):
@@ -70,3 +95,32 @@ class DemoScript(BaseModel):
     goal: str
     starting_url: str
     steps: List[Step]
+
+
+class ZoomAnchor(BaseModel):
+    """Represents the anchor point for a zoom effect."""
+    x: float
+    y: float
+
+
+class ZoomEffect(BaseModel):
+    """Represents a zoom effect in the timeline."""
+    id: str
+    startTime: float
+    length: float
+    multiplier: float
+    anchor: ZoomAnchor
+
+
+class BackgroundSettings(BaseModel):
+    """Represents background aesthetic settings."""
+    enabled: bool
+    presetId: str
+    padding: int = 60
+    roundedness: int = 12
+
+
+class EditorManifest(BaseModel):
+    """The complete declarative edit state for the video."""
+    effects: List[ZoomEffect]
+    background: BackgroundSettings

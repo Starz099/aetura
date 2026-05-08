@@ -4,7 +4,7 @@ import json
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from orchestrator import draft_demo_script, resume_demo_script, record_demo_video
+from orchestrator import draft_demo_script, resume_demo_script, record_demo_video, edit_video_manifest
 from typing import List, Any, Optional, Literal, Dict
 from fastapi.staticfiles import StaticFiles
 
@@ -73,6 +73,14 @@ class RecordRequest(BaseModel):
     recording_settings: Optional[RecordingSettingsRequest] = None
 
 
+class EditRequest(BaseModel):
+    steps: List[Any]
+    intent: str
+    current_manifest: Optional[Dict[str, Any]] = None
+    grok_api_key: str
+    duration: Optional[float] = None
+
+
 @app.get("/")
 async def root():
     return {
@@ -126,7 +134,7 @@ async def resume_website(request: ResumeRequest):
 async def record_website(request: RecordRequest):
     print(f"Received API request to record: {request.url}")
     try:
-        full_video_path = await record_demo_video(
+        full_video_path, enriched_steps = await record_demo_video(
             request.url,
             request.approved_steps,
             _dump_recording_settings(request.recording_settings),
@@ -138,6 +146,34 @@ async def record_website(request: RecordRequest):
     return {
         "status": "success",
         "video_url": f"http://localhost:8000/recordings/{filename}",
+        "enriched_steps": enriched_steps,
+    }
+
+
+@app.post("/edit")
+async def edit_website(request: EditRequest):
+    print(f"Received API request to edit video")
+    try:
+        manifest = await edit_video_manifest(
+            request.steps,
+            request.intent,
+            request.current_manifest,
+            request.grok_api_key,
+            request.duration,
+        )
+    except Exception as error:
+        error_text = str(error).lower()
+        if "rate limit" in error_text or "429" in error_text:
+            raise HTTPException(status_code=429, detail=str(error)) from error
+        # Return error response with frontend-expected format
+        return {
+            "status": "error",
+            "message": str(error),
+        }
+
+    return {
+        "status": "success",
+        "manifest": manifest,
     }
 
 

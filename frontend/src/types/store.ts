@@ -1,4 +1,4 @@
-import type { EditorClip, EditorEffect, EditorBackgroundSettings, ZoomAnchor } from "./editor";
+import type { EditorClip, EditorEffect, EditorBackgroundSettings, ZoomAnchor, EditorManifest, Step } from "./editor";
 import type { ExportRequest, ExportSettings } from "./export";
 
 // Timeline Slice
@@ -10,6 +10,7 @@ export interface TimelineState {
   sourceUrl: string | null;
   clips: EditorClip[];
   selectedClipId: string | null;
+  enrichedSteps: Step[];
 }
 
 export interface TimelineActions {
@@ -17,8 +18,9 @@ export interface TimelineActions {
   setCurrentTime: (time: number) => void;
   setDuration: (duration: number) => void;
   initializeTimeline: (sourceUrl: string, duration: number) => void;
+  setEnrichedSteps: (steps: Step[]) => void;
   seekTo: (time: number) => void;
-  jumpBy: (delta: number) => void;
+...
   togglePlay: () => void;
   resetTimeline: () => void;
   selectClip: (clipId: string | null) => void;
@@ -48,6 +50,7 @@ export interface EffectActions {
     updates: Partial<EditorBackgroundSettings>,
   ) => void;
   resetBackgroundSettings: () => void;
+  applyManifest: (manifest: EditorManifest) => void;
   clampEffect: (
     effect: Omit<EditorEffect, "anchor"> & { anchor?: Partial<ZoomAnchor> | null },
     duration: number,

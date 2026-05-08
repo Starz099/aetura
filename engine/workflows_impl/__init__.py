@@ -6,6 +6,7 @@ from .base import Workflow
 from .draft import DraftWorkflow
 from .resume import ResumeWorkflow
 from .record import RecordWorkflow
+from .edit import EditWorkflow
 
 __all__ = [
     "DEFAULT_RECORDING_SETTINGS",
@@ -16,4 +17,5 @@ __all__ = [
     "DraftWorkflow",
     "ResumeWorkflow",
     "RecordWorkflow",
+    "EditWorkflow",
 ]

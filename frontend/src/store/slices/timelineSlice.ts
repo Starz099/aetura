@@ -36,6 +36,7 @@ export const createTimelineSlice: StateCreator<
   sourceUrl: null,
   clips: [],
   selectedClipId: null,
+  enrichedSteps: [],
 
   setIsPlaying: (playing) => set({ isPlaying: playing }),
   setCurrentTime: (time) =>
@@ -73,6 +74,7 @@ export const createTimelineSlice: StateCreator<
       selectedClipId: null,
     });
   },
+  setEnrichedSteps: (steps) => set({ enrichedSteps: steps }),
   seekTo: (time) =>
     set((state) => ({ currentTime: clampTime(time, state.duration) })),
   jumpBy: (delta) =>

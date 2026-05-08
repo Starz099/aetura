@@ -7,6 +7,7 @@ while the implementation is split into focused modules under workflows_impl/.
 from workflows_impl import (
     DEFAULT_RECORDING_SETTINGS,
     DraftWorkflow,
+    EditWorkflow,
     MockFunction,
     MockToolCall,
     RecordWorkflow,
@@ -24,4 +25,5 @@ __all__ = [
     "DraftWorkflow",
     "ResumeWorkflow",
     "RecordWorkflow",
+    "EditWorkflow",
 ]
