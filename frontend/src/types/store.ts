@@ -1,4 +1,5 @@
-import type { EditorClip, EditorEffect, EditorBackgroundSettings, ZoomAnchor, EditorManifest, Step } from "./editor";
+import type { EditorClip, EditorEffect, EditorBackgroundSettings, ZoomAnchor, EditorManifest } from "./editor";
+import type { Step } from "./api";
 import type { ExportRequest, ExportSettings } from "./export";
 
 // Timeline Slice
@@ -20,7 +21,7 @@ export interface TimelineActions {
   initializeTimeline: (sourceUrl: string, duration: number) => void;
   setEnrichedSteps: (steps: Step[]) => void;
   seekTo: (time: number) => void;
-...
+  jumpBy: (delta: number) => void;
   togglePlay: () => void;
   resetTimeline: () => void;
   selectClip: (clipId: string | null) => void;

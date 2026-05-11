@@ -14,7 +14,6 @@ import type {
   EditorBackgroundSettings,
   EditorEffect,
   EditorEffectType,
-  EditorManifest,
   ZoomAnchor,
 } from "@/types/editor";
 import type { EffectSlice, TimelineSlice } from "@/types/store";

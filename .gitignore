@@ -38,6 +38,10 @@ pnpm-debug.log*
 # Ignore the build artifacts
 /src-tauri/target/
 /src-tauri/gen/
+/src-tauri/binaries/
+/engine/build/
+/engine/dist/
+/engine/main.spec
 
 # Ignore generated binaries
 *.rs.bk

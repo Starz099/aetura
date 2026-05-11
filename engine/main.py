@@ -1,14 +1,30 @@
 import os
 import glob
 import json
+import argparse
+import ctypes
+import sys
+import threading
+import time
+from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+import uvicorn
 from orchestrator import draft_demo_script, resume_demo_script, record_demo_video, edit_video_manifest
 from typing import List, Any, Optional, Literal, Dict
 from fastapi.staticfiles import StaticFiles
 
-os.makedirs("recordings", exist_ok=True)
+# Parse CLI arguments
+parser = argparse.ArgumentParser()
+parser.add_argument("--port", type=int, default=8000, help="Port to run the server on")
+parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
+parser.add_argument("--parent-pid", type=int, default=0, help="Parent process ID to watch")
+args = parser.parse_args()
+
+# Use a writable app data directory for recordings
+recordings_dir = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / "aetura" / "recordings"
+os.makedirs(recordings_dir, exist_ok=True)
 app = FastAPI(title="Aetura Engine API")
 
 app.add_middleware(
@@ -19,7 +35,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.mount("/recordings", StaticFiles(directory="recordings"), name="recordings")
+app.mount("/recordings", StaticFiles(directory=str(recordings_dir)), name="recordings")
+
+
+def is_process_running(pid: int) -> bool:
+    if pid <= 0:
+        return False
+
+    if os.name == "nt":
+        process_handle = ctypes.windll.kernel32.OpenProcess(0x1000, False, pid)
+        if not process_handle:
+            return False
+
+        try:
+            exit_code = ctypes.c_ulong()
+            if not ctypes.windll.kernel32.GetExitCodeProcess(process_handle, ctypes.byref(exit_code)):
+                return False
+            return exit_code.value == 259
+        finally:
+            ctypes.windll.kernel32.CloseHandle(process_handle)
+    else:
+        # Unix/Linux fallback
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
+
+def start_parent_watchdog(parent_pid: int) -> None:
+    if parent_pid <= 0:
+        return
+
+    def watch_parent() -> None:
+        while True:
+            if not is_process_running(parent_pid):
+                os._exit(0)
+            time.sleep(1)
+
+    threading.Thread(target=watch_parent, daemon=True).start()
 
 
 class ExploreRequest(BaseModel):
@@ -86,7 +140,7 @@ async def root():
     return {
         "message": "Welcome to the Aetura Engine API.",
         "status": "online",
-        "docs_url": "http://127.0.0.1:8000/docs",
+        "docs_url": f"http://{args.host}:{args.port}/docs",
     }
 
 
@@ -145,7 +199,7 @@ async def record_website(request: RecordRequest):
     filename = os.path.basename(full_video_path)
     return {
         "status": "success",
-        "video_url": f"http://localhost:8000/recordings/{filename}",
+        "video_url": f"http://{args.host}:{args.port}/recordings/{filename}",
         "enriched_steps": enriched_steps,
     }
 
@@ -190,11 +244,8 @@ async def load_dev_cache():
 @app.get("/library")
 async def get_library_videos():
     """Returns recorded videos with both local path and preview URL."""
-    # Ensure the folder exists
-    os.makedirs("recordings", exist_ok=True)
-
     # Get all mp4 files in the folder
-    search_path = os.path.abspath(os.path.join("recordings", "*.mp4"))
+    search_path = os.path.abspath(os.path.join(str(recordings_dir), "*.mp4"))
     video_files = glob.glob(search_path)
 
     # Sort by newest first
@@ -207,9 +258,14 @@ async def get_library_videos():
             {
                 "filename": filename,
                 "absolute_path": file_path,
-                "video_url": f"http://localhost:8000/recordings/{filename}",
+                "video_url": f"http://{args.host}:{args.port}/recordings/{filename}",
                 "created_at": os.path.getmtime(file_path),
             }
         )
 
     return {"videos": videos}
+
+
+if __name__ == "__main__":
+    start_parent_watchdog(args.parent_pid)
+    uvicorn.run(app, host=args.host, port=args.port)

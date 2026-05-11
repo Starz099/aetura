@@ -72,7 +72,6 @@ const EditorPage = () => {
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
   const selectEffect = useEditorStore((state) => state.selectEffect);
   const effects = useEditorStore((state) => state.effects);
-  const selectedEffectId = useEditorStore((state) => state.selectedEffectId);
   const backgroundSettings = useEditorStore(
     (state) => state.backgroundSettings,
   );

@@ -12,9 +12,114 @@ mod validation;
 use models::{ExportRequest, ExportResult, ExportStatusEvent};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::Emitter;
+use std::process::{Child, Command, Stdio};
+use tauri::{Emitter, Manager};
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 const EXPORT_STATUS_EVENT: &str = "export-status";
+
+/// Manages the Python engine sidecar process
+#[derive(Default)]
+struct EngineManager {
+    process: Mutex<Option<Child>>,
+    port: Mutex<u16>,
+}
+
+impl EngineManager {
+    /// Spawn the Python engine on an available port
+    fn spawn(&self) -> Result<u16, String> {
+        // Find an available port in the 5001-5010 range
+        let mut port = 5001u16;
+        let max_port = 5010u16;
+
+        loop {
+            if self.try_bind(port) {
+                break;
+            }
+            port += 1;
+            if port > max_port {
+                return Err("No available ports in range 5001-5010".to_string());
+            }
+        }
+
+        // Build the path to the sidecar executable
+        let mut sidecar_path = std::env::current_exe()
+            .map_err(|e| format!("Failed to get current exe: {}", e))?;
+        sidecar_path.pop(); // Remove the executable name, go to the directory
+        sidecar_path.push("main.exe");
+
+        // Fallback: if not found, try in the app root
+        if !sidecar_path.exists() {
+            sidecar_path = std::env::current_exe()
+                .map_err(|e| format!("Failed to get current exe: {}", e))?;
+            sidecar_path.set_file_name("main.exe");
+        }
+
+        // If still not found, try the original bundled location
+        if !sidecar_path.exists() {
+            eprintln!(
+                "[EngineManager] Warning: sidecar not found at {:?}, trying alternative paths",
+                sidecar_path
+            );
+            sidecar_path = std::path::PathBuf::from("main.exe");
+        }
+
+        // Spawn the sidecar
+        let mut command = Command::new(&sidecar_path);
+        command
+            .args(&[
+                "--port",
+                &port.to_string(),
+                "--host",
+                "127.0.0.1",
+                "--parent-pid",
+                &std::process::id().to_string(),
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+
+        #[cfg(target_os = "windows")]
+        {
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        let child = command
+            .spawn()
+            .map_err(|e| format!("Failed to spawn sidecar at {:?}: {}", sidecar_path, e))?;
+
+        *self.process.lock().unwrap() = Some(child);
+        *self.port.lock().unwrap() = port;
+
+        println!(
+            "[EngineManager] Python engine spawned at {:?} on port {}",
+            sidecar_path, port
+        );
+        Ok(port)
+    }
+
+    /// Try to bind to a port (simple check)
+    fn try_bind(&self, port: u16) -> bool {
+        std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+    }
+
+    /// Gracefully shutdown the sidecar
+    fn shutdown(&self) -> Result<(), String> {
+        if let Ok(mut proc_lock) = self.process.lock() {
+            if let Some(mut child) = proc_lock.take() {
+                println!("[EngineManager] Shutting down Python engine...");
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+        Ok(())
+    }
+}
 
 fn emit_export_status(app: &tauri::AppHandle, payload: ExportStatusEvent) {
     let _ = app.emit(EXPORT_STATUS_EVENT, &payload);
@@ -245,6 +350,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(ExportRuntimeState::default())
+        .manage(EngineManager::default())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -253,7 +359,26 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Spawn Python engine sidecar
+            let engine_manager = app.state::<EngineManager>();
+            match engine_manager.spawn() {
+                Ok(port) => {
+                    println!("[Tauri] Python engine started on port {}", port);
+                }
+                Err(e) => {
+                    eprintln!("[Tauri] Failed to start Python engine: {}", e);
+                }
+            }
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if let Some(engine_manager) = window.app_handle().try_state::<EngineManager>() {
+                    let _ = engine_manager.shutdown();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             start_export,
@@ -262,6 +387,14 @@ pub fn run() {
             open_path_in_explorer,
             copy_file_to_clipboard
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                // Gracefully shutdown the Python engine
+                if let Some(engine_manager) = app_handle.try_state::<EngineManager>() {
+                    let _ = engine_manager.shutdown();
+                }
+            }
+        });
 }

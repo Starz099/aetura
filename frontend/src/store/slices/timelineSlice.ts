@@ -77,7 +77,7 @@ export const createTimelineSlice: StateCreator<
   setEnrichedSteps: (steps) => set({ enrichedSteps: steps }),
   seekTo: (time) =>
     set((state) => ({ currentTime: clampTime(time, state.duration) })),
-  jumpBy: (delta) =>
+  jumpBy: (delta: number) =>
     set((state) => ({
       currentTime: clampTime(state.currentTime + delta, state.duration),
     })),
