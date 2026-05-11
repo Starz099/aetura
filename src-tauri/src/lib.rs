@@ -119,6 +119,19 @@ impl EngineManager {
         }
         Ok(())
     }
+
+    fn current_port(&self) -> Result<u16, String> {
+        let port = *self
+            .port
+            .lock()
+            .map_err(|_| "Internal error: engine port lock poisoned".to_string())?;
+
+        if port == 0 {
+            return Err("Python engine has not started yet".to_string());
+        }
+
+        Ok(port)
+    }
 }
 
 fn emit_export_status(app: &tauri::AppHandle, payload: ExportStatusEvent) {
@@ -344,6 +357,16 @@ fn copy_file_to_clipboard(path: String) -> Result<(), String> {
     dialogs::copy_file_to_clipboard(&path).map_err(|e| e.message())
 }
 
+/// Get the current Python engine port.
+#[tauri::command]
+fn get_engine_port(app: tauri::AppHandle) -> Result<u16, String> {
+    let engine_manager = app
+        .try_state::<EngineManager>()
+        .ok_or_else(|| "Engine manager state is unavailable".to_string())?;
+
+    engine_manager.current_port()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -385,7 +408,8 @@ pub fn run() {
             cancel_export,
             select_directory,
             open_path_in_explorer,
-            copy_file_to_clipboard
+            copy_file_to_clipboard,
+            get_engine_port
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

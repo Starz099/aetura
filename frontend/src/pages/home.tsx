@@ -14,7 +14,22 @@ import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useEditorStore } from "@/store/useEditorStore";
-import { apiClient, type DemoScript, type Step, type DOMElement } from "@/services/api";
+import {
+  apiClient,
+  type DevCacheResponse,
+  type DemoScript,
+  type Step,
+  type DOMElement,
+} from "@/services/api";
+
+function isDemoScript(value: DevCacheResponse | DemoScript): value is DemoScript {
+  return (
+    "goal" in value &&
+    "starting_url" in value &&
+    "steps" in value &&
+    Array.isArray(value.steps)
+  );
+}
 
 function Home() {
   const navigate = useNavigate();
@@ -136,8 +151,7 @@ function Home() {
 
   const handleLoadMock = async () => {
     try {
-      const response = await fetch("http://localhost:8000/dev/load-cache");
-      const rawData = await response.json();
+      const rawData: DevCacheResponse = await apiClient.loadDevCache();
 
       if (rawData.error) {
         console.error(rawData.error);
@@ -145,9 +159,15 @@ function Home() {
         return;
       }
 
-      const actualScriptData: DemoScript = rawData.agent_message
-        ? rawData.agent_message
-        : rawData;
+      const actualScriptData: DemoScript | null = isDemoScript(rawData)
+        ? rawData
+        : rawData.agent_message ?? null;
+
+      if (!actualScriptData) {
+        alert("No cache found. Run a real Start Mapping first.");
+        return;
+      }
+
       setScriptData(actualScriptData);
       setIsPathBroken(false);
       setFinalVideoUrl(null);

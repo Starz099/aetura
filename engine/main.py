@@ -1,12 +1,10 @@
 import os
-import glob
 import json
 import argparse
 import ctypes
 import sys
 import threading
 import time
-from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -14,6 +12,7 @@ import uvicorn
 from orchestrator import draft_demo_script, resume_demo_script, record_demo_video, edit_video_manifest
 from typing import List, Any, Optional, Literal, Dict
 from fastapi.staticfiles import StaticFiles
+from recordings import get_recordings_dir
 
 # Parse CLI arguments
 parser = argparse.ArgumentParser()
@@ -23,7 +22,7 @@ parser.add_argument("--parent-pid", type=int, default=0, help="Parent process ID
 args = parser.parse_args()
 
 # Use a writable app data directory for recordings
-recordings_dir = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming")) / "aetura" / "recordings"
+recordings_dir = get_recordings_dir()
 os.makedirs(recordings_dir, exist_ok=True)
 app = FastAPI(title="Aetura Engine API")
 
@@ -245,19 +244,18 @@ async def load_dev_cache():
 async def get_library_videos():
     """Returns recorded videos with both local path and preview URL."""
     # Get all mp4 files in the folder
-    search_path = os.path.abspath(os.path.join(str(recordings_dir), "*.mp4"))
-    video_files = glob.glob(search_path)
+    video_files = list(recordings_dir.glob("*.mp4"))
 
     # Sort by newest first
     video_files.sort(key=os.path.getmtime, reverse=True)
 
     videos = []
     for file_path in video_files:
-        filename = os.path.basename(file_path)
+        filename = file_path.name
         videos.append(
             {
                 "filename": filename,
-                "absolute_path": file_path,
+                "absolute_path": str(file_path),
                 "video_url": f"http://{args.host}:{args.port}/recordings/{filename}",
                 "created_at": os.path.getmtime(file_path),
             }

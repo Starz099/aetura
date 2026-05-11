@@ -20,6 +20,7 @@ import { EditorTimeline } from "@/components/editor/timeline";
 import { AIEditorChat } from "@/components/editor/AIEditorChat";
 import { BackgroundToolPanel } from "@/components/editor/tools";
 import { useExport } from "@/services/export";
+import { apiClient } from "@/services/api";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { invoke } from "@tauri-apps/api/core";
 
@@ -106,9 +107,11 @@ const EditorPage = () => {
       }
     }
 
-    return `http://localhost:8000/recordings/${encodeURIComponent(
+    const baseUrl = new URL(apiClient.getBaseUrl());
+    baseUrl.pathname = `/recordings/${encodeURIComponent(
       recordingUrl.split(/[\\/]/).pop() || "",
     )}`;
+    return baseUrl.toString();
   }, [recordingUrl]);
 
   const onExport = async () => {

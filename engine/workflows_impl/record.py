@@ -3,14 +3,17 @@
 import asyncio
 import base64
 import os
+import platform
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from models.script import BoundingBox, EnrichedStep
 from .base import Workflow
 from .mocks import MockToolCall
 from .settings import _sanitize_recording_settings
+from recordings import get_recordings_dir
 
 
 class RecordWorkflow(Workflow):
@@ -24,7 +27,8 @@ class RecordWorkflow(Workflow):
     ) -> tuple[str, List[Dict[str, object]]]:
         """Record a video of automation steps and return (video_path, enriched_steps)."""
         # Note: This workflow doesn't need AI, so we don't initialize it
-        os.makedirs("recordings", exist_ok=True)
+        recordings_dir = get_recordings_dir()
+        os.makedirs(recordings_dir, exist_ok=True)
         config = _sanitize_recording_settings(recording_settings)
         frames_dir = os.path.abspath("temp_frames")
         audio_path = os.path.abspath("temp_audio.wav")
@@ -37,9 +41,7 @@ class RecordWorkflow(Workflow):
         if os.path.exists(audio_path):
             os.remove(audio_path)
 
-        video_path = os.path.abspath(
-            f"recordings/demo_{int(asyncio.get_event_loop().time())}.mp4",
-        )
+        video_path = recordings_dir / f"demo_{int(asyncio.get_event_loop().time())}.mp4"
 
         from playwright.async_api import async_playwright
 
@@ -96,32 +98,40 @@ class RecordWorkflow(Workflow):
             recording_start_time = asyncio.get_event_loop().time()
 
             if config["record_audio"]:
-                audio_cmd = [
-                    "ffmpeg",
-                    "-y",
-                    "-f",
-                    "pulse",
-                    "-i",
-                    config["audio_device"],
-                    "-ac",
-                    "2",
-                    "-ar",
-                    "48000",
-                    audio_path,
-                ]
-                try:
-                    audio_process = subprocess.Popen(
-                        audio_cmd,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-                    print(f"Audio recording enabled (device: {config['audio_device']})")
-                except Exception as error:
-                    print(
-                        "Audio recording disabled: "
-                        f"could not start ffmpeg audio capture ({error})"
-                    )
-                    audio_process = None
+                # Audio recording is OS-specific and complex; disable on Windows for now
+                if platform.system() == "Windows":
+                    print("Audio recording skipped on Windows (not yet supported)")
+                else:
+                    # Linux/Mac: use pulse for audio on Linux, coreaudio on Mac
+                    audio_format = "pulse" if platform.system() == "Linux" else "dshow"
+                    audio_cmd = [
+                        "ffmpeg",
+                        "-y",
+                        "-f",
+                        audio_format,
+                        "-i",
+                        config.get("audio_device", "default"),
+                        "-ac",
+                        "2",
+                        "-ar",
+                        "48000",
+                        audio_path,
+                    ]
+                    try:
+                        print(f"Starting audio capture ({audio_format})...")
+                        audio_process = subprocess.Popen(
+                            audio_cmd,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                        )
+                        print(f"Audio recording started (device: {config.get('audio_device', 'default')})")
+                    except FileNotFoundError:
+                        print("Audio recording disabled: ffmpeg not found in PATH")
+                        audio_process = None
+                    except Exception as error:
+                        print(f"Audio recording disabled: {error}")
+                        audio_process = None
 
             # Replay steps with cursor visualization
             step_count = 0
@@ -215,6 +225,13 @@ class RecordWorkflow(Workflow):
 
         # Stitch frames into video
         print("Encoding video...")
+        
+        # Validate frames were captured
+        captured_frames = list(Path(frames_dir).glob("frame_*.jpg"))
+        if not captured_frames:
+            raise RuntimeError(f"No frames captured in {frames_dir}")
+        print(f"Found {len(captured_frames)} captured frames")
+        
         ffmpeg_cmd = [
             "ffmpeg",
             "-y",
@@ -238,6 +255,7 @@ class RecordWorkflow(Workflow):
 
         has_audio = (
             config["record_audio"]
+            and not platform.system() == "Windows"
             and os.path.exists(audio_path)
             and os.path.getsize(audio_path) > 0
         )
@@ -255,13 +273,23 @@ class RecordWorkflow(Workflow):
                 ]
             )
 
-        ffmpeg_cmd.append(video_path)
-        subprocess.run(ffmpeg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        ffmpeg_cmd.append(str(video_path))
+        
+        # Run ffmpeg with visible output for debugging
+        try:
+            result = subprocess.run(ffmpeg_cmd, check=False, capture_output=False, text=False)
+            if result.returncode != 0:
+                print(f"WARNING: ffmpeg exited with code {result.returncode}")
+            elif not video_path.exists():
+                raise RuntimeError(f"ffmpeg completed but output file not created: {video_path}")
+            else:
+                print(f"Video saved: {video_path}")
+        except FileNotFoundError:
+            raise RuntimeError("ffmpeg not found in PATH. Please install ffmpeg to record videos.")
 
         # Cleanup
         shutil.rmtree(frames_dir)
         if os.path.exists(audio_path):
             os.remove(audio_path)
-        print(f"Video saved: {video_path}")
 
-        return video_path, enriched_steps
+        return str(video_path), enriched_steps
