@@ -92,23 +92,38 @@ impl EngineManager {
         let mut sidecar_path = std::env::current_exe()
             .map_err(|e| format!("Failed to get current exe: {}", e))?;
         sidecar_path.pop(); // Remove the executable name, go to the directory
-        sidecar_path.push("main.exe");
 
-        // Fallback: if not found, try in the app root
-        if !sidecar_path.exists() {
-            sidecar_path = std::env::current_exe()
-                .map_err(|e| format!("Failed to get current exe: {}", e))?;
-            sidecar_path.set_file_name("main.exe");
+        // Tauri sidecar naming convention: <name>-<target-triple>.exe
+        let target_triple = "x86_64-pc-windows-msvc"; // This should ideally be dynamic or match your build
+        let sidecar_name = format!("main-{}", target_triple);
+        let sidecar_exe = if cfg!(windows) { format!("{}.exe", sidecar_name) } else { sidecar_name.clone() };
+        
+        let mut candidates = vec![
+            sidecar_path.join(&sidecar_exe),
+            sidecar_path.join("main.exe"),
+            sidecar_path.join("binaries").join(&sidecar_exe),
+            sidecar_path.join("_up_").join("binaries").join(&sidecar_exe),
+        ];
+
+        // Also check same directory as exe with set_file_name
+        if let Ok(exe) = std::env::current_exe() {
+            let mut p = exe.clone();
+            p.set_file_name(&sidecar_exe);
+            candidates.push(p);
         }
 
-        // If still not found, try the original bundled location
-        if !sidecar_path.exists() {
-            eprintln!(
-                "[EngineManager] Warning: sidecar not found at {:?}, trying alternative paths",
-                sidecar_path
-            );
-            sidecar_path = std::path::PathBuf::from("main.exe");
+        let mut final_path = None;
+        for path in candidates {
+            if path.exists() {
+                final_path = Some(path);
+                break;
+            }
         }
+
+        let sidecar_path = final_path.unwrap_or_else(|| {
+            eprintln!("[EngineManager] Warning: Sidecar not found in common locations, falling back to 'main.exe'");
+            std::path::PathBuf::from("main.exe")
+        });
 
         // Spawn the sidecar
         let mut command = Command::new(&sidecar_path);
@@ -137,18 +152,35 @@ impl EngineManager {
             command.creation_flags(CREATE_NO_WINDOW);
         }
 
-        let child = command
-            .spawn()
-            .map_err(|e| format!("Failed to spawn sidecar at {:?}: {}", sidecar_path, e))?;
+        let child = command.spawn();
 
-        *self.process.lock().unwrap() = Some(child);
-        *self.port.lock().unwrap() = port;
+        match child {
+            Ok(c) => {
+                *self.process.lock().unwrap() = Some(c);
+                *self.port.lock().unwrap() = port;
+                println!(
+                    "[EngineManager] Python engine spawned at {:?} on port {}",
+                    sidecar_path, port
+                );
+                Ok(port)
+            }
+            Err(e) => {
+                let error_msg = format!(
+                    "Failed to spawn Python engine sidecar!\n\nPath: {:?}\nError: {}\n\nPlease ensure the application was installed correctly and antivirus is not blocking the engine.",
+                    sidecar_path, e
+                );
+                eprintln!("[EngineManager] {}", error_msg);
+                
+                // Show a native error dialog
+                rfd::MessageDialog::new()
+                    .set_title("Aetura - Engine Startup Error")
+                    .set_description(&error_msg)
+                    .set_level(rfd::MessageLevel::Error)
+                    .show();
 
-        println!(
-            "[EngineManager] Python engine spawned at {:?} on port {}",
-            sidecar_path, port
-        );
-        Ok(port)
+                Err(error_msg)
+            }
+        }
     }
 
     /// Try to bind to a port (simple check)

@@ -21,12 +21,27 @@ function run(command, args, options = {}) {
 
 fs.mkdirSync(targetBinaryDir, { recursive: true });
 
+console.log('Running PyInstaller to bundle Python engine...');
 run('uv', [
   'run',
   'pyinstaller',
   '--onefile',
-  '--hidden-import=uvicorn',
+  '--noconsole',
+  '--hidden-import=uvicorn.logging',
+  '--hidden-import=uvicorn.loops',
+  '--hidden-import=uvicorn.loops.auto',
+  '--hidden-import=uvicorn.protocols',
+  '--hidden-import=uvicorn.protocols.http',
+  '--hidden-import=uvicorn.protocols.http.auto',
+  '--hidden-import=uvicorn.protocols.websockets',
+  '--hidden-import=uvicorn.protocols.websockets.auto',
+  '--hidden-import=uvicorn.lifespan',
+  '--hidden-import=uvicorn.lifespan.on',
   '--hidden-import=fastapi',
+  '--hidden-import=pydantic',
+  '--hidden-import=playwright',
+  '--collect-all=browser_use',
+  '--collect-all=playwright',
   'main.py',
 ], {
   cwd: engineDir,

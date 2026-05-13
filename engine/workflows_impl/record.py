@@ -48,15 +48,38 @@ class RecordWorkflow(Workflow):
         # to support local development.
         ffmpeg_exe = os.environ.get("FFMPEG_PATH", "ffmpeg")
 
-        from playwright.async_api import async_playwright
+        from playwright.async_api import async_playwright, Error as PlaywrightError
 
         enriched_steps = []
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
-                headless=False,
-                args=["--disable-gpu", "--disable-dev-shm-usage"],
-            )
+            try:
+                browser = await p.chromium.launch(
+                    headless=False,
+                    args=["--disable-gpu", "--disable-dev-shm-usage"],
+                )
+            except PlaywrightError as e:
+                if "Executable doesn't exist" in str(e) or "not found" in str(e).lower():
+                    print("Chromium not found during recording. Attempting to install...")
+                    import sys
+                    try:
+                        subprocess.run(
+                            [sys.executable, "__playwright_cli__", "install", "chromium"],
+                            check=True,
+                            capture_output=True,
+                            text=True
+                        )
+                        print("Chromium installed successfully. Retrying recording launch...")
+                        browser = await p.chromium.launch(
+                            headless=False,
+                            args=["--disable-gpu", "--disable-dev-shm-usage"],
+                        )
+                    except Exception as install_error:
+                        raise RuntimeError(
+                            f"Failed to auto-install Chromium for recording: {install_error}"
+                        ) from install_error
+                else:
+                    raise e
 
             context = await browser.new_context(
                 viewport={
