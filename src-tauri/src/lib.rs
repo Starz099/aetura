@@ -14,6 +14,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::process::{Child, Command, Stdio};
 use tauri::{Emitter, Manager};
+use std::fs;
+use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -22,6 +24,42 @@ use std::os::windows::process::CommandExt;
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 const EXPORT_STATUS_EVENT: &str = "export-status";
+
+fn materialize_backgrounds_dir() -> Result<PathBuf, String> {
+    let base_dir = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let backgrounds_dir = base_dir.join("aetura").join("backgrounds");
+    fs::create_dir_all(&backgrounds_dir)
+        .map_err(|error| format!("Failed to create backgrounds directory: {}", error))?;
+
+    let assets: [(&str, &[u8]); 4] = [
+        (
+            "aurora-1.png",
+            include_bytes!("../../frontend/public/backgrounds/aurora-1.png"),
+        ),
+        (
+            "night-1.png",
+            include_bytes!("../../frontend/public/backgrounds/night-1.png"),
+        ),
+        (
+            "ocean-1.png",
+            include_bytes!("../../frontend/public/backgrounds/ocean-1.png"),
+        ),
+        (
+            "sunset-1.png",
+            include_bytes!("../../frontend/public/backgrounds/sunset-1.png"),
+        ),
+    ];
+
+    for (filename, bytes) in assets {
+        let output_path = backgrounds_dir.join(filename);
+        fs::write(&output_path, bytes)
+            .map_err(|error| format!("Failed to write {}: {}", output_path.display(), error))?;
+    }
+
+    Ok(backgrounds_dir)
+}
 
 /// Manages the Python engine sidecar process
 #[derive(Default)]
@@ -32,7 +70,10 @@ struct EngineManager {
 
 impl EngineManager {
     /// Spawn the Python engine on an available port
-    fn spawn(&self) -> Result<u16, String> {
+    ///
+    /// `ffmpeg_path` - optional absolute path to the bundled ffmpeg sidecar. If provided
+    /// it will be injected into the spawned engine process via the `FFMPEG_PATH` env var.
+    fn spawn(&self, ffmpeg_path: Option<String>) -> Result<u16, String> {
         // Find an available port in the 5001-5010 range
         let mut port = 5001u16;
         let max_port = 5010u16;
@@ -83,6 +124,13 @@ impl EngineManager {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null());
+
+        // If we were given an absolute path to the bundled ffmpeg sidecar, pass it
+        // to the engine process so the Python backend can use the bundled binary
+        // instead of relying on system PATH.
+        if let Some(ref ff) = ffmpeg_path {
+            command.env("FFMPEG_PATH", ff);
+        }
 
         #[cfg(target_os = "windows")]
         {
@@ -383,9 +431,89 @@ pub fn run() {
                 )?;
             }
 
-            // Spawn Python engine sidecar
+            // Resolve bundled ffmpeg sidecar (if present) and pass its absolute
+            // path to the Python engine via the FFMPEG_PATH env var so the
+            // backend uses the bundled binary instead of the system PATH.
+            let ffmpeg_path = {
+                // Try common candidate names under a few plausible locations:
+                // - next to the running executable in a `binaries/` folder
+                // - the project `src-tauri/binaries/` during dev
+                let candidates = [
+                    "ffmpeg",
+                    "ffmpeg.exe",
+                    "ffmpeg-x86_64-pc-windows-msvc.exe",
+                    "ffmpeg-x86_64-unknown-linux-gnu",
+                ];
+
+                // Search multiple likely locations for the bundled sidecar. We walk
+                // upward from the executable directory and from the current working
+                // directory to cover both dev and packaged cases.
+                let mut found: Option<std::path::PathBuf> = None;
+
+                // Helper to test a base dir for binaries/<candidate> and base/<candidate>
+                let test_base = |base: &std::path::Path| -> Option<std::path::PathBuf> {
+                    for cand in &candidates {
+                        let p1 = base.join("binaries").join(cand);
+                        if p1.exists() {
+                            return Some(p1);
+                        }
+                        let p2 = base.join(cand);
+                        if p2.exists() {
+                            return Some(p2);
+                        }
+                    }
+                    None
+                };
+
+                // Start from the current executable location and walk up a few levels
+                if let Ok(current_exe) = std::env::current_exe() {
+                    if let Some(mut dir) = current_exe.parent().map(|p| p.to_path_buf()) {
+                        for _ in 0..5usize {
+                            if let Some(p) = test_base(&dir) {
+                                found = Some(p);
+                                break;
+                            }
+                            if !dir.pop() {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // If still not found, try walking up from the current working directory
+                if found.is_none() {
+                    if let Ok(mut dir) = std::env::current_dir() {
+                        for _ in 0..5usize {
+                            if let Some(p) = test_base(&dir) {
+                                found = Some(p);
+                                break;
+                            }
+                            if !dir.pop() {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if let Some(path) = found {
+                    std::env::set_var("FFMPEG_PATH", &path);
+                    Some(path.to_string_lossy().to_string())
+                } else {
+                    eprintln!("[Tauri] Could not find bundled ffmpeg sidecar in known locations");
+                    None
+                }
+            };
+
+            if let Ok(path) = materialize_backgrounds_dir() {
+                std::env::set_var("BACKGROUNDS_PATH", path.to_string_lossy().to_string());
+                println!("[Tauri] Backgrounds directory resolved to: {:?}", path);
+            } else {
+                eprintln!("[Tauri] Warning: Could not materialize backgrounds directory");
+            }
+
+            // Spawn Python engine sidecar, injecting FFMPEG_PATH when available
             let engine_manager = app.state::<EngineManager>();
-            match engine_manager.spawn() {
+            match engine_manager.spawn(ffmpeg_path) {
                 Ok(port) => {
                     println!("[Tauri] Python engine started on port {}", port);
                 }

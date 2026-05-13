@@ -47,6 +47,7 @@ export interface ExportResult {
 export interface ExportServiceResult {
   status: ExportStatus;
   message: string;
+  details?: string;
   progressPercent?: number;
   outputPath?: string;
 }
@@ -75,6 +76,7 @@ export interface ExportStatusEvent {
 export interface ExportState {
   status: ExportStatus;
   message: string;
+  details?: string;
   progressPercent: number;
   stage?: ExportStatusEvent["kind"];
   outputPath?: string;

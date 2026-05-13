@@ -57,6 +57,7 @@ const EditorPage = () => {
     isSuccess,
     outputPath,
     message,
+    details,
     progressPercent,
     export: handleExport,
     cancel: cancelExport,
@@ -68,6 +69,7 @@ const EditorPage = () => {
     useState<ExportResolution>("1080p");
   const [selectedFps, setSelectedFps] = useState<15 | 30 | 60>(60);
   const [copied, setCopied] = useState(false);
+  const [copiedError, setCopiedError] = useState(false);
 
   const resetTimeline = useEditorStore((state) => state.resetTimeline);
   const addZoomEffect = useEditorStore((state) => state.addZoomEffect);
@@ -122,23 +124,6 @@ const EditorPage = () => {
 
     setCopied(false);
 
-    // Log clip data for debugging
-    console.group("EXPORT DEBUG");
-    console.log("Source URL:", sourceUrl);
-    console.log("Timeline Duration:", duration, "seconds");
-    console.log(`Number of Clips: ${clips.length}`);
-
-    if (clips.length === 0) {
-      console.warn("WARNING: No clips in timeline! Export may fail.");
-    }
-
-    clips.forEach((clip, idx) => {
-      const clipDuration = clip.sourceEnd - clip.sourceStart;
-      console.log(
-        `  Clip ${idx}: [${clip.sourceStart.toFixed(2)}s - ${clip.sourceEnd.toFixed(2)}s] (duration: ${clipDuration.toFixed(2)}s) @ timeline ${clip.timelineStart.toFixed(2)}s`,
-      );
-    });
-
     const exportRequest = buildExportRequest(
       sourceUrl,
       clips,
@@ -151,17 +136,6 @@ const EditorPage = () => {
         fps: selectedFps,
       },
     );
-
-    console.log(`Export Request:`);
-    console.log(` - Total Duration: ${exportRequest.duration}s`);
-    console.log(` - Segments Count: ${exportRequest.segments.length}`);
-    exportRequest.segments.forEach((seg, idx) => {
-      const segDuration = seg.outPoint - seg.inPoint;
-      console.log(
-        `    Segment ${idx}: [${seg.inPoint.toFixed(2)}s - ${seg.outPoint.toFixed(2)}s] (duration: ${segDuration.toFixed(2)}s)`,
-      );
-    });
-    console.groupEnd();
 
     // Intentionally do not await here to avoid losing immediate processing UI
     // in environments where invoke timing can resolve unexpectedly early.
@@ -203,6 +177,19 @@ const EditorPage = () => {
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error("Failed to copy video to clipboard:", err);
+    }
+  };
+
+  const onCopyExportError = async () => {
+    const text = details || message;
+    if (!text) return;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedError(true);
+      setTimeout(() => setCopiedError(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy export error:", err);
     }
   };
 
@@ -383,11 +370,33 @@ const EditorPage = () => {
               </section>
 
               <div className="rounded-md border border-border bg-muted/25 p-3 text-xs text-muted-foreground">
-                {message
-                  ? message
-                  : isActivelyProcessing
-                    ? "Rendering export..."
-                    : `Selected: FILE • ${selectedFormat.toUpperCase()} • ${selectedResolution.toUpperCase()} • ${selectedFps} FPS.`}
+                <div className="space-y-2">
+                  <p className="whitespace-pre-wrap break-words">
+                    {message
+                      ? message
+                      : isActivelyProcessing
+                        ? "Rendering export..."
+                        : `Selected: FILE • ${selectedFormat.toUpperCase()} • ${selectedResolution.toUpperCase()} • ${selectedFps} FPS.`}
+                  </p>
+
+                  {status === "error" && details ? (
+                    <div className="space-y-2 rounded-md border border-destructive/30 bg-destructive/5 p-2 text-[11px] text-destructive">
+                      <p className="font-medium">Export details</p>
+                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-background/80 p-2 text-[10px] text-foreground">
+                        {details}
+                      </pre>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-full"
+                        onClick={onCopyExportError}
+                      >
+                        {copiedError ? "error copied" : "copy error"}
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </CardContent>
 
@@ -518,7 +527,7 @@ const EditorPage = () => {
             </Button>
 
             {message ? (
-              <p className="text-[10px] leading-tight text-muted-foreground">
+              <p className="whitespace-pre-wrap break-words text-[10px] leading-tight text-muted-foreground">
                 {message}
               </p>
             ) : null}

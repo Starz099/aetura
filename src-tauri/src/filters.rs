@@ -168,10 +168,10 @@ pub fn build_background_filter_graph(
 
 pub fn background_preset_filename(preset_id: &str) -> Option<&'static str> {
     match preset_id {
-        "aurora-1" => Some("aurora-1.svg"),
-        "ocean-1" => Some("ocean-1.svg"),
-        "sunset-1" => Some("sunset-1.svg"),
-        "night-1" => Some("night-1.svg"),
+        "aurora-1" => Some("aurora-1.png"),
+        "ocean-1" => Some("ocean-1.png"),
+        "sunset-1" => Some("sunset-1.png"),
+        "night-1" => Some("night-1.png"),
         _ => None,
     }
 }
@@ -182,13 +182,71 @@ pub fn is_supported_background_preset(preset_id: &str) -> bool {
 
 pub fn resolve_background_preset_path(preset_id: &str) -> Option<PathBuf> {
     let filename = background_preset_filename(preset_id)?;
+    
+    // Priority 1: Check BACKGROUNDS_PATH environment variable (set by Tauri setup)
+    // This handles both dev and packaged app contexts
+    if let Ok(backgrounds_env) = std::env::var("BACKGROUNDS_PATH") {
+        let env_path = PathBuf::from(&backgrounds_env).join(filename);
+        if env_path.exists() {
+            if let Ok(abs_path) = std::fs::canonicalize(&env_path) {
+                return Some(abs_path);
+            }
+            return Some(env_path);
+        }
+        // Try SVG fallback from env path
+        if filename.ends_with(".png") {
+            let svg_filename = filename.replace(".png", ".svg");
+            let svg_path = PathBuf::from(&backgrounds_env).join(&svg_filename);
+            if svg_path.exists() {
+                if let Ok(abs_path) = std::fs::canonicalize(&svg_path) {
+                    return Some(abs_path);
+                }
+                return Some(svg_path);
+            }
+        }
+    }
+    
+    // Priority 2: Fall back to relative paths (dev mode if env var not set)
     let candidates = [
         PathBuf::from("../frontend/public/backgrounds").join(filename),
         PathBuf::from("frontend/public/backgrounds").join(filename),
+        PathBuf::from("frontend/dist/backgrounds").join(filename),
         PathBuf::from("backgrounds").join(filename),
     ];
 
-    candidates.into_iter().find(|path| path.exists())
+    for path in candidates.iter() {
+        if path.exists() {
+            // Convert to absolute path to ensure it works from any working directory
+            if let Ok(abs_path) = std::fs::canonicalize(path) {
+                return Some(abs_path);
+            }
+            // Fallback if canonicalize fails for some reason
+            return Some(path.clone());
+        }
+    }
+    
+    // Priority 3: Try SVG fallback for backwards compatibility
+    if let Some(filename_str) = background_preset_filename(preset_id) {
+        if filename_str.ends_with(".png") {
+            let svg_filename = filename_str.replace(".png", ".svg");
+            let svg_candidates = [
+                PathBuf::from("../frontend/public/backgrounds").join(&svg_filename),
+                PathBuf::from("frontend/public/backgrounds").join(&svg_filename),
+                PathBuf::from("frontend/dist/backgrounds").join(&svg_filename),
+                PathBuf::from("backgrounds").join(&svg_filename),
+            ];
+            for path in svg_candidates.iter() {
+                if path.exists() {
+                    if let Ok(abs_path) = std::fs::canonicalize(path) {
+                        return Some(abs_path);
+                    }
+                    return Some(path.clone());
+                }
+            }
+        }
+    }
+    
+    None
 }
 
 #[cfg(test)]

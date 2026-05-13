@@ -23,6 +23,7 @@ export function useExport() {
   const [state, setState] = useState<ExportState>({
     status: "idle",
     message: "",
+    details: undefined,
     progressPercent: 0,
   });
   const isMountedRef = useRef(true);
@@ -70,6 +71,7 @@ export function useExport() {
           progressPercent: 100,
           message: payload.message ?? "Export completed",
           outputPath: payload.outputPath,
+          details: undefined,
         }));
         return;
       }
@@ -80,6 +82,7 @@ export function useExport() {
           status: "cancelled",
           stage: "cancelled",
           message: payload.message ?? "Export cancelled",
+          details: undefined,
         }));
         return;
       }
@@ -90,6 +93,7 @@ export function useExport() {
           status: "error",
           stage: "failed",
           message: payload.message ?? "Export failed",
+          details: payload.message,
         }));
       }
     })
@@ -114,6 +118,7 @@ export function useExport() {
         setState({
           status: "running",
           message: "Rendering export...",
+          details: undefined,
           progressPercent: 0,
           stage: "started",
         });
@@ -140,6 +145,7 @@ export function useExport() {
           ...prev,
           ...result,
           progressPercent: result.progressPercent ?? prev.progressPercent,
+          details: result.details ?? prev.details,
         }));
         return result;
       } catch (error) {
@@ -148,6 +154,7 @@ export function useExport() {
         const newState: ExportState = {
           status: "error",
           message,
+          details: error instanceof Error ? error.message : String(error),
           progressPercent: 0,
           stage: "failed",
         };
@@ -174,12 +181,13 @@ export function useExport() {
         status: "error",
         stage: "failed",
         message,
+        details: message,
       }));
     }
   }, []);
 
   const reset = useCallback(() => {
-    setState({ status: "idle", message: "", progressPercent: 0 });
+    setState({ status: "idle", message: "", details: undefined, progressPercent: 0 });
   }, []);
 
   const isExporting = state.status === "running";
@@ -191,6 +199,7 @@ export function useExport() {
     // State
     status: state.status,
     message: state.message,
+    details: state.details,
     progressPercent: state.progressPercent,
     stage: state.stage,
     outputPath: state.outputPath,

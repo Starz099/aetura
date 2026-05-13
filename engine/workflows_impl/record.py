@@ -43,6 +43,11 @@ class RecordWorkflow(Workflow):
 
         video_path = recordings_dir / f"demo_{int(asyncio.get_event_loop().time())}.mp4"
 
+        # Use bundled ffmpeg binary path when provided by the Tauri host via
+        # the FFMPEG_PATH environment variable. Fall back to system `ffmpeg`
+        # to support local development.
+        ffmpeg_exe = os.environ.get("FFMPEG_PATH", "ffmpeg")
+
         from playwright.async_api import async_playwright
 
         enriched_steps = []
@@ -105,7 +110,7 @@ class RecordWorkflow(Workflow):
                     # Linux/Mac: use pulse for audio on Linux, coreaudio on Mac
                     audio_format = "pulse" if platform.system() == "Linux" else "dshow"
                     audio_cmd = [
-                        "ffmpeg",
+                        ffmpeg_exe,
                         "-y",
                         "-f",
                         audio_format,
@@ -233,7 +238,7 @@ class RecordWorkflow(Workflow):
         print(f"Found {len(captured_frames)} captured frames")
         
         ffmpeg_cmd = [
-            "ffmpeg",
+            ffmpeg_exe,
             "-y",
             "-framerate",
             str(config["capture_fps"]),
