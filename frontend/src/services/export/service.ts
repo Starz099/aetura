@@ -15,6 +15,22 @@ export interface ExportRequest extends BaseExportRequest {
  * Export service for handling video export operations.
  */
 export class ExportService {
+  private formatError(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message;
+    }
+
+    if (typeof error === "string") {
+      return error;
+    }
+
+    try {
+      return JSON.stringify(error, null, 2);
+    } catch {
+      return String(error);
+    }
+  }
+
   /**
    * Build export segments from editor clips
    */
@@ -29,12 +45,6 @@ export class ExportService {
 
   async export(request: ExportRequest): Promise<ExportServiceResult> {
     this.validateRequest(request);
-
-    console.log("ExportService.export() called");
-    console.log(`   Segments: ${request.segments.length}, Duration: ${request.duration}s`);
-    request.segments.forEach((seg, idx) => {
-      console.log(`   [${idx}] in=${seg.inPoint.toFixed(2)}, out=${seg.outPoint.toFixed(2)}`);
-    });
 
     try {
       const result = await invoke<{ outputPath: string }>("start_export", {
@@ -58,13 +68,14 @@ export class ExportService {
         outputPath: result.outputPath,
       };
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed to export video";
+      const details = this.formatError(error);
+      const message = "Export failed";
 
-      console.error("Export failed:", message);
+      console.error("Export failed:", details);
       return {
         status: "error",
         message,
+        details,
       };
     }
   }

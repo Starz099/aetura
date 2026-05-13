@@ -114,7 +114,7 @@ fn test_background_filter_graph_clamps_roundedness() {
 
 #[test]
 fn test_background_preset_filename_known() {
-    assert_eq!(background_preset_filename("aurora-1"), Some("aurora-1.svg"));
+    assert_eq!(background_preset_filename("aurora-1"), Some("aurora-1.png"));
     assert_eq!(background_preset_filename("unknown"), None);
 }
 

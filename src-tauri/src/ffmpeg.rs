@@ -16,6 +16,7 @@ fn build_ffmpeg_args(
 ) -> Vec<String> {
     eprintln!("=== BUILD_FFMPEG_ARGS DEBUG ===");
     eprintln!("Segments count: {}", request.segments.len());
+    let has_background_input = background_input.is_some();
     
     let resolution_filter = match request.resolution {
         ExportResolution::P720 => "scale=1280:-2",
@@ -25,7 +26,7 @@ fn build_ffmpeg_args(
     let fps_filter = format!("fps={}", request.fps);
     let source_label = "[vconcat]";
     let video_filter_graph = filter_graph.replace("[0:v]", source_label);
-    let tuned_video_chain = if request.background.enabled {
+    let tuned_video_chain = if request.background.enabled && has_background_input {
         format!("{};[vout]{}[vfinal]", video_filter_graph, fps_filter)
     } else {
         format!(
@@ -206,11 +207,18 @@ fn parse_ffmpeg_time_seconds(line: &str) -> Option<f64> {
 /// Resolve the FFmpeg binary path
 ///
 /// Searches for ffmpeg in this order:
-/// 1. AETURA_FFMPEG_PATH environment variable
-/// 2. Same directory as current executable
-/// 3. System PATH
+/// 1. FFMPEG_PATH environment variable
+/// 2. AETURA_FFMPEG_PATH environment variable
+/// 3. Same directory as current executable and adjacent `binaries/` folder
+/// 4. System PATH
 pub fn resolve_ffmpeg_binary() -> PathBuf {
-    // Check environment variable first
+    // Check environment variable first.
+    if let Ok(custom_path) = env::var("FFMPEG_PATH") {
+        if !custom_path.trim().is_empty() {
+            return PathBuf::from(custom_path);
+        }
+    }
+
     if let Ok(custom_path) = env::var("AETURA_FFMPEG_PATH") {
         if !custom_path.trim().is_empty() {
             return PathBuf::from(custom_path);
@@ -220,7 +228,14 @@ pub fn resolve_ffmpeg_binary() -> PathBuf {
     // Check current executable directory
     if let Ok(current_exe) = env::current_exe() {
         if let Some(exe_dir) = current_exe.parent() {
-            let candidates = [exe_dir.join("ffmpeg"), exe_dir.join("ffmpeg.exe")];
+            let candidates = [
+                exe_dir.join("ffmpeg"),
+                exe_dir.join("ffmpeg.exe"),
+                exe_dir.join("ffmpeg-x86_64-pc-windows-msvc.exe"),
+                exe_dir.join("binaries").join("ffmpeg"),
+                exe_dir.join("binaries").join("ffmpeg.exe"),
+                exe_dir.join("binaries").join("ffmpeg-x86_64-pc-windows-msvc.exe"),
+            ];
             for candidate in candidates {
                 if candidate.exists() {
                     return candidate;
@@ -276,50 +291,15 @@ fn probe_source_has_audio(source: &str) -> bool {
     }
 }
 
-/// Execute FFmpeg with the given arguments
-pub fn execute_ffmpeg(
+fn run_ffmpeg_process(
+    ffmpeg: &PathBuf,
+    args: &[String],
     request: &ExportRequest,
-    filter_graph: &str,
-    background_input: Option<&str>,
-    output: &str,
     mut on_progress: impl FnMut(f64),
     should_cancel: impl Fn() -> bool,
 ) -> Result<(), AppError> {
-    eprintln!("=== EXECUTE_FFMPEG DEBUG ===");
-    eprintln!("Number of segments: {}", request.segments.len());
-    for (idx, segment) in request.segments.iter().enumerate() {
-        eprintln!(
-            "  Segment {}: source={}, in_point={}, out_point={}, start_on_timeline={}",
-            idx, segment.source_url, segment.in_point, segment.out_point, segment.start_on_timeline
-        );
-    }
-    eprintln!("Export duration: {}", request.duration);
-    
-    let ffmpeg = resolve_ffmpeg_binary();
-    let has_audio = probe_source_has_audio(&request.segments[0].source_url);
-    eprintln!("Has audio: {}", has_audio);
-    
-    let args = build_ffmpeg_args(request, filter_graph, background_input, output, has_audio);
-
-    eprintln!("FFmpeg args (first 20):");
-    for (idx, arg) in args.iter().take(20).enumerate() {
-        eprintln!("  [{}]: {}", idx, arg);
-    }
-    if args.len() > 20 {
-        eprintln!("  ... and {} more args", args.len() - 20);
-    }
-    
-    // Find and print the filter_complex arg
-    for (idx, arg) in args.iter().enumerate() {
-        if arg == "-filter_complex" && idx + 1 < args.len() {
-            eprintln!("Filter complex:\n{}", args[idx + 1]);
-            break;
-        }
-    }
-    eprintln!("=== END DEBUG ===");
-
-    let mut command = Command::new(&ffmpeg);
-    command.args(&args);
+    let mut command = Command::new(ffmpeg);
+    command.args(args);
     command.stdout(Stdio::null());
     command.stderr(Stdio::piped());
 
@@ -336,7 +316,6 @@ pub fn execute_ffmpeg(
     })?;
     let mut last_stderr_lines: VecDeque<String> = VecDeque::with_capacity(12);
     let mut last_emitted_percent: i32 = -1;
-
     for line_result in BufReader::new(stderr).lines() {
         if should_cancel() {
             child.kill().map_err(|error| {
@@ -382,7 +361,6 @@ pub fn execute_ffmpeg(
     let status = child.wait().map_err(|error| {
         AppError::FFmpegError(format!("Could not wait for ffmpeg process: {}", error))
     })?;
-
     if !status.success() {
         let tail = last_stderr_lines.into_iter().collect::<Vec<_>>().join("\n");
 
@@ -391,8 +369,44 @@ pub fn execute_ffmpeg(
             tail
         )));
     }
-
     Ok(())
+}
+
+/// Execute FFmpeg with the given arguments
+pub fn execute_ffmpeg(
+    request: &ExportRequest,
+    filter_graph: &str,
+    background_input: Option<&str>,
+    output: &str,
+    mut on_progress: impl FnMut(f64),
+    should_cancel: impl Fn() -> bool,
+) -> Result<(), AppError> {
+    let ffmpeg = resolve_ffmpeg_binary();
+    
+    let has_audio = probe_source_has_audio(&request.segments[0].source_url);
+    
+    let args = build_ffmpeg_args(request, filter_graph, background_input, output, has_audio);
+
+    match run_ffmpeg_process(&ffmpeg, &args, request, |p| on_progress(p), &should_cancel) {
+        Ok(()) => Ok(()),
+        Err(first_error) => {
+            let should_retry_without_background = background_input.is_some()
+                && matches!(
+                    &first_error,
+                    AppError::FFmpegError(message)
+                        if message.contains("no decoder found for: svg")
+                            || message.contains("Could not find codec parameters for stream 0 (Video: svg")
+                            || message.contains("Error binding filtergraph inputs/outputs")
+                );
+
+            if !should_retry_without_background {
+                return Err(first_error);
+            }
+
+            let retry_args = build_ffmpeg_args(request, filter_graph, None, output, has_audio);
+            run_ffmpeg_process(&ffmpeg, &retry_args, request, |p| on_progress(p), should_cancel)
+        }
+    }
 }
 
 #[cfg(test)]

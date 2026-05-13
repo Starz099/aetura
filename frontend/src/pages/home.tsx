@@ -14,7 +14,22 @@ import { useNavigate } from "react-router-dom";
 import { useRef, useState } from "react";
 import { useSettingsStore } from "@/store/useSettingsStore";
 import { useEditorStore } from "@/store/useEditorStore";
-import { apiClient, type DemoScript, type Step, type DOMElement } from "@/services/api";
+import {
+  apiClient,
+  type DevCacheResponse,
+  type DemoScript,
+  type Step,
+  type DOMElement,
+} from "@/services/api";
+
+function isDemoScript(value: DevCacheResponse | DemoScript): value is DemoScript {
+  return (
+    "goal" in value &&
+    "starting_url" in value &&
+    "steps" in value &&
+    Array.isArray(value.steps)
+  );
+}
 
 function Home() {
   const navigate = useNavigate();
@@ -30,7 +45,13 @@ function Home() {
   const [isPathBroken, setIsPathBroken] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
+  const [lastError, setLastError] = useState<string | null>(null);
   const grokApiKeys = useSettingsStore((state) => state.grokApiKeys);
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    alert("Error copied to clipboard!");
+  };
   const recordingSettings = useSettingsStore(
     (state) => state.recordingSettings,
   );
@@ -49,6 +70,7 @@ function Home() {
       setLoading(true);
       setIsPathBroken(false);
       setFinalVideoUrl(null);
+      setLastError(null);
 
       const scriptData = await apiClient.draftScript({
         url: urlRef.current.value,
@@ -59,7 +81,7 @@ function Home() {
       setScriptData(scriptData);
     } catch (error) {
       console.error("Error starting mapping:", error);
-      alert("Failed to start mapping. Check console for details.");
+      setLastError(error instanceof Error ? error.message : String(error));
     } finally {
       startMappingInFlightRef.current = false;
       setLoading(false);
@@ -76,6 +98,7 @@ function Home() {
 
     resumeInFlightRef.current = true;
     setLoading(true);
+    setLastError(null);
     try {
       const updatedScript = await apiClient.resumeScript({
         url: scriptData.starting_url,
@@ -88,7 +111,7 @@ function Home() {
       setIsPathBroken(false);
     } catch (error) {
       console.error("Error resuming script:", error);
-      alert("Failed to resume script. Check console for details.");
+      setLastError(error instanceof Error ? error.message : String(error));
     } finally {
       resumeInFlightRef.current = false;
       setLoading(false);
@@ -104,6 +127,7 @@ function Home() {
     recordInFlightRef.current = true;
     setIsRecording(true);
     setFinalVideoUrl(null);
+    setLastError(null);
 
     try {
       const response = await apiClient.recordVideo({
@@ -127,7 +151,7 @@ function Home() {
       console.log("Recording response:", response);
     } catch (error) {
       console.error("Error recording video:", error);
-      alert("Failed to record video. Check console for details.");
+      setLastError(error instanceof Error ? error.message : String(error));
     } finally {
       recordInFlightRef.current = false;
       setIsRecording(false);
@@ -136,8 +160,7 @@ function Home() {
 
   const handleLoadMock = async () => {
     try {
-      const response = await fetch("http://localhost:8000/dev/load-cache");
-      const rawData = await response.json();
+      const rawData: DevCacheResponse = await apiClient.loadDevCache();
 
       if (rawData.error) {
         console.error(rawData.error);
@@ -145,9 +168,15 @@ function Home() {
         return;
       }
 
-      const actualScriptData: DemoScript = rawData.agent_message
-        ? rawData.agent_message
-        : rawData;
+      const actualScriptData: DemoScript | null = isDemoScript(rawData)
+        ? rawData
+        : rawData.agent_message ?? null;
+
+      if (!actualScriptData) {
+        alert("No cache found. Run a real Start Mapping first.");
+        return;
+      }
+
       setScriptData(actualScriptData);
       setIsPathBroken(false);
       setFinalVideoUrl(null);
@@ -428,6 +457,29 @@ function Home() {
             </CardContent>
           )}
         </Card>
+      )}
+      {lastError && (
+        <div className="mt-4 rounded-md border border-destructive/50 bg-destructive/10 p-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-destructive">
+              Error Detected
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => copyToClipboard(lastError)}
+            >
+              Copy Error
+            </Button>
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground break-all">
+            {lastError}
+          </p>
+          <p className="mt-2 text-[10px] text-muted-foreground italic">
+            Tip: If this is a Playwright error, the browser binaries might be missing in the installed app.
+          </p>
+        </div>
       )}
     </div>
   );

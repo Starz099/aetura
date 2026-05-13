@@ -77,6 +77,11 @@ def _sanitize_recording_settings(
     )
 
     settings["record_audio"] = bool(recording_settings.get("record_audio", False))
+    
+    # Sanitize audio device (will be skipped on Windows anyway)
+    audio_device = recording_settings.get("audio_device")
+    if isinstance(audio_device, str) and audio_device.strip():
+        settings["audio_device"] = audio_device.strip()
 
     output_preset = recording_settings.get("output_preset")
     if output_preset in ALLOWED_OUTPUT_PRESETS:

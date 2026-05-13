@@ -15,6 +15,12 @@ import type {
 } from "@/types/api";
 import { APIError } from "@/types/api";
 
+export interface DevCacheResponse {
+  error?: string;
+  agent_message?: DemoScript;
+  [key: string]: unknown;
+}
+
 /**
  * API Client for communicating with the backend.
  * Provides centralized error handling, request validation, and retry logic.
@@ -28,7 +34,7 @@ export class APIClient {
   private static readonly RECORDING_TIMEOUT_MS = 300000;
 
   constructor(
-    baseUrl: string = "http://localhost:8000",
+    baseUrl: string = "http://127.0.0.1:8000",
     timeout: number = 30000,
     retryCount: number = 3,
   ) {
@@ -204,6 +210,13 @@ export class APIClient {
   }
 
   /**
+   * Load the cached draft payload used by the editor.
+   */
+  async loadDevCache(): Promise<DevCacheResponse> {
+    return this.request<DevCacheResponse>("GET", "/dev/load-cache");
+  }
+
+  /**
    * Validate draft script request.
    */
   private validateDraftRequest(request: DraftScriptRequest): void {
@@ -253,6 +266,13 @@ export class APIClient {
   }
 
   /**
+   * Get the current base URL.
+   */
+  getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
+  /**
    * Set request timeout in milliseconds.
    */
   setTimeout(ms: number): void {
@@ -265,6 +285,23 @@ export class APIClient {
   setRetryCount(count: number): void {
     this.retryCount = count;
   }
+}
+
+/**
+ * Configure the shared API client from a runtime port resolver.
+ */
+export async function configureApiClient(
+  getEnginePort: () => Promise<number>,
+  fallbackBaseUrl: string = "http://127.0.0.1:8000",
+): Promise<APIClient> {
+  try {
+    const port = await getEnginePort();
+    apiClient.setBaseUrl(`http://127.0.0.1:${port}`);
+  } catch {
+    apiClient.setBaseUrl(fallbackBaseUrl);
+  }
+
+  return apiClient;
 }
 
 // Exported singleton instance

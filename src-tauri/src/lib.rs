@@ -12,9 +12,207 @@ mod validation;
 use models::{ExportRequest, ExportResult, ExportStatusEvent};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::Emitter;
+use std::process::{Child, Command, Stdio};
+use tauri::{Emitter, Manager};
+use std::fs;
+use std::path::PathBuf;
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 const EXPORT_STATUS_EVENT: &str = "export-status";
+
+fn materialize_backgrounds_dir() -> Result<PathBuf, String> {
+    let base_dir = std::env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir);
+    let backgrounds_dir = base_dir.join("aetura").join("backgrounds");
+    fs::create_dir_all(&backgrounds_dir)
+        .map_err(|error| format!("Failed to create backgrounds directory: {}", error))?;
+
+    let assets: [(&str, &[u8]); 4] = [
+        (
+            "aurora-1.png",
+            include_bytes!("../../frontend/public/backgrounds/aurora-1.png"),
+        ),
+        (
+            "night-1.png",
+            include_bytes!("../../frontend/public/backgrounds/night-1.png"),
+        ),
+        (
+            "ocean-1.png",
+            include_bytes!("../../frontend/public/backgrounds/ocean-1.png"),
+        ),
+        (
+            "sunset-1.png",
+            include_bytes!("../../frontend/public/backgrounds/sunset-1.png"),
+        ),
+    ];
+
+    for (filename, bytes) in assets {
+        let output_path = backgrounds_dir.join(filename);
+        fs::write(&output_path, bytes)
+            .map_err(|error| format!("Failed to write {}: {}", output_path.display(), error))?;
+    }
+
+    Ok(backgrounds_dir)
+}
+
+/// Manages the Python engine sidecar process
+#[derive(Default)]
+struct EngineManager {
+    process: Mutex<Option<Child>>,
+    port: Mutex<u16>,
+}
+
+impl EngineManager {
+    /// Spawn the Python engine on an available port
+    ///
+    /// `ffmpeg_path` - optional absolute path to the bundled ffmpeg sidecar. If provided
+    /// it will be injected into the spawned engine process via the `FFMPEG_PATH` env var.
+    fn spawn(&self, ffmpeg_path: Option<String>) -> Result<u16, String> {
+        // Find an available port in the 5001-5010 range
+        let mut port = 5001u16;
+        let max_port = 5010u16;
+
+        loop {
+            if self.try_bind(port) {
+                break;
+            }
+            port += 1;
+            if port > max_port {
+                return Err("No available ports in range 5001-5010".to_string());
+            }
+        }
+
+        // Build the path to the sidecar executable
+        let mut sidecar_path = std::env::current_exe()
+            .map_err(|e| format!("Failed to get current exe: {}", e))?;
+        sidecar_path.pop(); // Remove the executable name, go to the directory
+
+        // Tauri sidecar naming convention: <name>-<target-triple>.exe
+        let target_triple = "x86_64-pc-windows-msvc"; // This should ideally be dynamic or match your build
+        let sidecar_name = format!("main-{}", target_triple);
+        let sidecar_exe = if cfg!(windows) { format!("{}.exe", sidecar_name) } else { sidecar_name.clone() };
+        
+        let mut candidates = vec![
+            sidecar_path.join(&sidecar_exe),
+            sidecar_path.join("main.exe"),
+            sidecar_path.join("binaries").join(&sidecar_exe),
+            sidecar_path.join("_up_").join("binaries").join(&sidecar_exe),
+        ];
+
+        // Also check same directory as exe with set_file_name
+        if let Ok(exe) = std::env::current_exe() {
+            let mut p = exe.clone();
+            p.set_file_name(&sidecar_exe);
+            candidates.push(p);
+        }
+
+        let mut final_path = None;
+        for path in candidates {
+            if path.exists() {
+                final_path = Some(path);
+                break;
+            }
+        }
+
+        let sidecar_path = final_path.unwrap_or_else(|| {
+            eprintln!("[EngineManager] Warning: Sidecar not found in common locations, falling back to 'main.exe'");
+            std::path::PathBuf::from("main.exe")
+        });
+
+        // Spawn the sidecar
+        let mut command = Command::new(&sidecar_path);
+        command
+            .args(&[
+                "--port",
+                &port.to_string(),
+                "--host",
+                "127.0.0.1",
+                "--parent-pid",
+                &std::process::id().to_string(),
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+
+        // If we were given an absolute path to the bundled ffmpeg sidecar, pass it
+        // to the engine process so the Python backend can use the bundled binary
+        // instead of relying on system PATH.
+        if let Some(ref ff) = ffmpeg_path {
+            command.env("FFMPEG_PATH", ff);
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
+
+        let child = command.spawn();
+
+        match child {
+            Ok(c) => {
+                *self.process.lock().unwrap() = Some(c);
+                *self.port.lock().unwrap() = port;
+                println!(
+                    "[EngineManager] Python engine spawned at {:?} on port {}",
+                    sidecar_path, port
+                );
+                Ok(port)
+            }
+            Err(e) => {
+                let error_msg = format!(
+                    "Failed to spawn Python engine sidecar!\n\nPath: {:?}\nError: {}\n\nPlease ensure the application was installed correctly and antivirus is not blocking the engine.",
+                    sidecar_path, e
+                );
+                eprintln!("[EngineManager] {}", error_msg);
+                
+                // Show a native error dialog
+                rfd::MessageDialog::new()
+                    .set_title("Aetura - Engine Startup Error")
+                    .set_description(&error_msg)
+                    .set_level(rfd::MessageLevel::Error)
+                    .show();
+
+                Err(error_msg)
+            }
+        }
+    }
+
+    /// Try to bind to a port (simple check)
+    fn try_bind(&self, port: u16) -> bool {
+        std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+    }
+
+    /// Gracefully shutdown the sidecar
+    fn shutdown(&self) -> Result<(), String> {
+        if let Ok(mut proc_lock) = self.process.lock() {
+            if let Some(mut child) = proc_lock.take() {
+                println!("[EngineManager] Shutting down Python engine...");
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+        Ok(())
+    }
+
+    fn current_port(&self) -> Result<u16, String> {
+        let port = *self
+            .port
+            .lock()
+            .map_err(|_| "Internal error: engine port lock poisoned".to_string())?;
+
+        if port == 0 {
+            return Err("Python engine has not started yet".to_string());
+        }
+
+        Ok(port)
+    }
+}
 
 fn emit_export_status(app: &tauri::AppHandle, payload: ExportStatusEvent) {
     let _ = app.emit(EXPORT_STATUS_EVENT, &payload);
@@ -239,12 +437,23 @@ fn copy_file_to_clipboard(path: String) -> Result<(), String> {
     dialogs::copy_file_to_clipboard(&path).map_err(|e| e.message())
 }
 
+/// Get the current Python engine port.
+#[tauri::command]
+fn get_engine_port(app: tauri::AppHandle) -> Result<u16, String> {
+    let engine_manager = app
+        .try_state::<EngineManager>()
+        .ok_or_else(|| "Engine manager state is unavailable".to_string())?;
+
+    engine_manager.current_port()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(ExportRuntimeState::default())
+        .manage(EngineManager::default())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -253,15 +462,123 @@ pub fn run() {
                         .build(),
                 )?;
             }
+
+            // Resolve bundled ffmpeg sidecar (if present) and pass its absolute
+            // path to the Python engine via the FFMPEG_PATH env var so the
+            // backend uses the bundled binary instead of the system PATH.
+            let ffmpeg_path = {
+                // Try common candidate names under a few plausible locations:
+                // - next to the running executable in a `binaries/` folder
+                // - the project `src-tauri/binaries/` during dev
+                let candidates = [
+                    "ffmpeg",
+                    "ffmpeg.exe",
+                    "ffmpeg-x86_64-pc-windows-msvc.exe",
+                    "ffmpeg-x86_64-unknown-linux-gnu",
+                ];
+
+                // Search multiple likely locations for the bundled sidecar. We walk
+                // upward from the executable directory and from the current working
+                // directory to cover both dev and packaged cases.
+                let mut found: Option<std::path::PathBuf> = None;
+
+                // Helper to test a base dir for binaries/<candidate> and base/<candidate>
+                let test_base = |base: &std::path::Path| -> Option<std::path::PathBuf> {
+                    for cand in &candidates {
+                        let p1 = base.join("binaries").join(cand);
+                        if p1.exists() {
+                            return Some(p1);
+                        }
+                        let p2 = base.join(cand);
+                        if p2.exists() {
+                            return Some(p2);
+                        }
+                    }
+                    None
+                };
+
+                // Start from the current executable location and walk up a few levels
+                if let Ok(current_exe) = std::env::current_exe() {
+                    if let Some(mut dir) = current_exe.parent().map(|p| p.to_path_buf()) {
+                        for _ in 0..5usize {
+                            if let Some(p) = test_base(&dir) {
+                                found = Some(p);
+                                break;
+                            }
+                            if !dir.pop() {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // If still not found, try walking up from the current working directory
+                if found.is_none() {
+                    if let Ok(mut dir) = std::env::current_dir() {
+                        for _ in 0..5usize {
+                            if let Some(p) = test_base(&dir) {
+                                found = Some(p);
+                                break;
+                            }
+                            if !dir.pop() {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if let Some(path) = found {
+                    std::env::set_var("FFMPEG_PATH", &path);
+                    Some(path.to_string_lossy().to_string())
+                } else {
+                    eprintln!("[Tauri] Could not find bundled ffmpeg sidecar in known locations");
+                    None
+                }
+            };
+
+            if let Ok(path) = materialize_backgrounds_dir() {
+                std::env::set_var("BACKGROUNDS_PATH", path.to_string_lossy().to_string());
+                println!("[Tauri] Backgrounds directory resolved to: {:?}", path);
+            } else {
+                eprintln!("[Tauri] Warning: Could not materialize backgrounds directory");
+            }
+
+            // Spawn Python engine sidecar, injecting FFMPEG_PATH when available
+            let engine_manager = app.state::<EngineManager>();
+            match engine_manager.spawn(ffmpeg_path) {
+                Ok(port) => {
+                    println!("[Tauri] Python engine started on port {}", port);
+                }
+                Err(e) => {
+                    eprintln!("[Tauri] Failed to start Python engine: {}", e);
+                }
+            }
+
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                if let Some(engine_manager) = window.app_handle().try_state::<EngineManager>() {
+                    let _ = engine_manager.shutdown();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             start_export,
             cancel_export,
             select_directory,
             open_path_in_explorer,
-            copy_file_to_clipboard
+            copy_file_to_clipboard,
+            get_engine_port
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                // Gracefully shutdown the Python engine
+                if let Some(engine_manager) = app_handle.try_state::<EngineManager>() {
+                    let _ = engine_manager.shutdown();
+                }
+            }
+        });
 }
